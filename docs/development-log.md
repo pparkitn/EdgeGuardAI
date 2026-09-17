@@ -110,3 +110,40 @@ Hands-on findings across the multi-machine system, cameras, and speakers.
 
 ---
 
+
+### Session Learnings (2026-09-17)
+
+**CI / quality tooling**
+
+- GitHub Actions workflow (`.github/workflows/test.yml`): ruff → compileall → pytest on push/PR. No hardware needed — the tests mock by design: MQTT (publisher returns `False` when offline), and Polly/Google Cast/cameras are never imported (minimal `requirements-dev.txt` means boto3/pychromecast/insightface/opencv can't even install).
+- 27 unit tests cover recognizer (cosine), database (save/load), events (schema/topics), config (env overrides), scheduler (targeting).
+- `pyproject.toml`: `[tool.pytest.ini_options] pythonpath=["."]` is required so tests can import root modules; ruff select `E4,E7,E9,F,I` kept fixes small (26 auto-fixed: import sorting + unused imports).
+- Verified locally in a clean venv with only dev deps — mirrors CI exactly.
+
+**Performance (measured on the Jetson, CPU-only onnxruntime)**
+
+- Detection (buffalo_l, det 640): **439 ms avg / 448 ms p95** — 99 % of frame time.
+- Recognition (cosine, 12 people / 42 embeddings): **2.7 ms avg / 3.4 ms p95** — negligible.
+- Full-pipeline throughput: **2.29 FPS** (437 ms/frame) — comfortably above the configured 2 FPS.
+- MQTT LAN round-trip: **9.2 ms avg / 21.0 ms p95**.
+- Memory: **~750 MB** RSS (vision pipeline incl. models); CPU ~2.4 cores during inference.
+- `scripts/benchmark_jetson.py` reproduces these; TensorRT/GPU is the documented next step (est. 5–10×).
+
+**Repo hygiene / public exposure**
+
+- Private LAN IPs and Zigbee IEEE (MAC) addresses are now **completely absent** from the public repo: README, docs, config, and *all git history*. Twice-rewritten history (`git filter-branch` then full squash) — after `filter-branch`, remember to delete `refs/original/*` and expire reflogs or old objects stay alive.
+- `config.yaml` (real IPs) is **gitignored**; the repo ships `config.yaml.example` with placeholders (`JETSON_IP`, `PI_IP`, `CAMERA_USER`, `..._IEEE`). `edgeguard_config.py` falls back to the example if absent; deploy scripts never overwrite a device's real config.
+- User-facing docs keep placeholders even for usernames (`JETSON_USER`, `PI_USER`, `CAMERA_USER`).
+
+**Git operations footguns**
+
+- Squashing history to a single commit: `git checkout --orphan tmp && git add -A && git commit && git branch -M tmp main && git tag -f v1.0.0 -m ...` then force-push main + tag. Verify with `git ls-remote`.
+- `git tag` has **no `-q` flag** (only `git commit` does).
+- `gh` CLI absent and no `GITHUB_TOKEN` → release creation must be done via the web UI (`/releases/new?tag=v1.0.0`).
+- GitHub Actions can show stale runs/caches after force-push; workflow file name doesn't matter (`test.yml` = `ci.yml`).
+
+**Documentation discipline**
+
+- Claims must match implementation: reworded "correlates camera + Zigbee" → "designed around event correlation … Zigbee integration under development"; README documents 4 speakers everywhere (stale "3" fixed in architecture.md/deployment.md/voice-broadcasting.md).
+- Rebranded as **"Distributed Edge AI Security Platform"** (job-search positioning); added Reliability section (async delivery + isolated channels), measured Performance section, note that demo face images aren't in the repo.
+- Architecture PDF (`docs/EdgeGuard_AI_Architecture.pdf`) added and linked; repo has a single commit + single `v1.0.0` tag.
