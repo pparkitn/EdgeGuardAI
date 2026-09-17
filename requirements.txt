@@ -1,0 +1,2 @@
+-r requirements-vision.txt
+-r requirements-voice.txt

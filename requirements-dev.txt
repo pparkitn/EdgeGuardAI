@@ -1,0 +1,8 @@
+# Minimal dependency set for CI (lint + unit tests).
+# Unit tests never touch GPU, cameras, speakers, or AWS.
+numpy
+PyYAML
+paho-mqtt
+schedule
+pytest
+ruff

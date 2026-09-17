@@ -1,0 +1,262 @@
+# =============================================================
+#  EdgeGuard AI - central configuration
+# =============================================================
+#  Single source of truth for every component on every machine.
+#  Git-pull on any device, start the service you want - it reads
+#  this file to reach all other devices.
+#
+#  Override any value per-machine with an environment variable:
+#  EDGEGUARD_<PATH_WITH_UNDERSCORES>, e.g.
+#    EDGEGUARD_BROKER_HOST=JETSON_IP
+#    EDGEGUARD_CAMERA_PASSWORD=secret
+#    EDGEGUARD_SPEAKERS="Kitchen speaker,Bedroom  speaker"
+#
+#  Secrets (passwords, AWS keys) are NOT stored here - use env
+#  vars or the standard AWS credential chain.
+# =============================================================
+
+device:
+  # machine roles: vision | voice | monitor | broker
+  # (informational - pick by starting the service you want)
+  role: auto
+  # name: auto-detected from hostname if omitted
+  name: ""
+
+# --- network infrastructure ------------------------------------
+
+broker:
+  # Jetson Xavier NX - the EdgeGuard event bus (Mosquitto)
+  host: JETSON_IP
+  port: 1883
+  topic_prefix: edgeguard
+
+jetson:
+  host: JETSON_IP
+  user: JETSON_USER
+  # the Jetson also runs the Mosquitto broker (system service)
+
+raspberry_pi:
+  host: PI_IP
+  user: PI_USER
+  remote_dir: /home/pi/edgeguard
+  zigbee_broker_host: PI_IP
+  zigbee_broker_port: 1883
+
+# --- cameras ----------------------------------------------------
+
+cameras:
+  # USB camera (machine where the pipeline runs)
+  usb:
+    index: 0
+    width: 1280
+    height: 720
+    camera_id: front_entrance
+
+  # IP/RTSP cameras (Reolink etc.) - one entry per camera
+  rtsp:
+    - id: back_yard
+      host: YARD_CAMERA_IP
+      port: 554
+      user: CAMERA_USER
+      path: /Preview_01_main
+      transport: tcp
+    - id: garage
+      host: GARAGE_CAMERA_IP
+      port: 554
+      user: CAMERA_USER
+      path: /h264Preview_01_main
+      transport: tcp
+
+  # shared RTSP password - NOT here; use EDGEGUARD_CAMERA_PASSWORD
+
+# --- vision pipeline (face recognition) --------------------------
+
+vision:
+  recognition_threshold: 0.55
+  detection_threshold: 0.60
+  unknown_face_margin: 0.15
+  republish_interval: 10.0
+  frame_width: 1280
+  frame_height: 720
+  frame_rate: 2
+  reconnect_delay: 3.0
+  # path to the ffmpeg binary (default: imageio-ffmpeg's static build;
+  # set to /usr/bin/ffmpeg on machines without one, e.g. the Jetson)
+  ffmpeg_path: ""
+
+# --- voice broadcaster -------------------------------------------
+
+speakers:
+  - "Kitchen speaker"
+  - "Kitchen Speaker"
+  - "Natalia speaker"
+  - "Bedroom  speaker"
+
+voice:
+  polly_region: us-east-1
+  polly_voice: Brian
+  http_port: 8000
+  local_playback: true
+  interrupt_playback: true
+  announce_recognized: false
+  announcement_cooldown: 60.0
+  # if a known person was seen on the same camera within this
+  # many seconds, an unknown_person_detected event is NOT announced
+  # (avoids false alarms from head turns etc.)
+  unknown_grace_period: 30.0
+
+announcements:
+  templates:
+    unknown_person_detected: "Security alert. An unknown person has been detected at {location}."
+    person_recognized: "Welcome home, {person_id}."
+  camera_locations:
+    front_entrance: "the front entrance"
+    back_door: "the back door"
+    garage_door: "the garage door"
+    side_door: "the side door"
+    back_yard: "the back yard"
+    garage: "the garage"
+
+# --- scheduled announcements -------------------------------------
+# Ported from the legacy HomeAuto googlecast.py scheduler (same times).
+#
+# time:  "HH:MM" (24h, local time on the broadcaster machine)
+# days:  optional weekday list; omitted = every day
+# every: alternative to time/days - interval in seconds
+# text:  what Polly will say
+# speakers: optional list of Google Cast targets; absent = ALL speakers
+# local:  optional; false = do not play on this machine's speaker
+#         (legacy semantics: cast-only entries had local playback off)
+#
+# NOTE: "Family Room speaker" is not on the LAN anymore; its slots
+# were mapped to the available speakers.
+schedule:
+  # --- daily ---
+  - time: "07:10"
+    speakers: ["Natalia speaker"]
+    local: false
+    text: "Good morning, Magda! Have a wonderful day."
+
+  - time: "08:44"
+    speakers: []
+    local: true
+    text: "Time to get ready for school, kids!"
+
+  - time: "08:45"
+    speakers:
+      - "Natalia speaker"
+      - "Kitchen speaker"
+      - "Kitchen Speaker"
+      - "Bedroom  speaker"
+    local: false
+    text: "Time to get ready for school, kids!"
+
+  - time: "13:00"
+    speakers: ["Natalia speaker"]
+    local: true
+    text: "Attention! It's one o'clock."
+
+  - time: "16:30"
+    speakers:
+      - "Bedroom  speaker"
+      - "Kitchen Speaker"
+    local: false
+    text: "Natalia, time to empty the dishwasher."
+
+  - time: "16:30"
+    speakers: ["Kitchen Speaker"]
+    local: false
+    text: "Don't forget to do your Kumon homework!"
+
+  - time: "21:00"
+    speakers:
+      - "Bedroom  speaker"
+      - "Kitchen Speaker"
+    local: false
+    text: "Natalia, time to empty the dishwasher."
+
+  - time: "21:00"
+    speakers: ["Kitchen Speaker"]
+    local: false
+    text: "Don't forget to do your Kumon homework!"
+
+  - time: "21:30"
+    speakers:
+      - "Kitchen Speaker"
+      - "Bedroom  speaker"
+    local: false
+    text: "Good night, kids! Time to go to sleep."
+
+  # --- tuesday ---
+  - time: "16:20"
+    days: [tuesday]
+    speakers:
+      - "Kitchen Speaker"
+      - "Natalia speaker"
+    local: false
+    text: "Time to drive to Kumon. Get your things ready!"
+
+  - time: "17:20"
+    days: [tuesday]
+    speakers:
+      - "Kitchen Speaker"
+      - "Natalia speaker"
+    local: false
+    text: "Time to pick up from Kumon."
+
+  # --- wednesday ---
+  - time: "17:00"
+    days: [wednesday]
+    speakers:
+      - "Natalia speaker"
+      - "Bedroom  speaker"
+    local: true
+    text: "Don't forget, it's rock climbing day!"
+
+  - time: "21:03"
+    days: [wednesday]
+    speakers: ["Kitchen Speaker"]
+    local: false
+    text: "Don't forget to do your Kumon homework!"
+
+  # --- thursday ---
+  - time: "16:20"
+    days: [thursday]
+    speakers:
+      - "Kitchen Speaker"
+      - "Natalia speaker"
+    local: false
+    text: "Time to drive to Kumon. Get your things ready!"
+
+  - time: "17:20"
+    days: [thursday]
+    speakers:
+      - "Kitchen Speaker"
+      - "Natalia speaker"
+    local: false
+    text: "Time to pick up from Kumon."
+
+  # --- not ported (not voice announcements) ---
+  # - wall plug ON 20:00 / OFF 23:30 (Zigbee MQTT control)
+  # - public-IP reporting every 100 s + Google Sheets jobs
+  # - vacation countdown (target date 2023-07-09, expired; was dynamic)
+
+# --- zigbee sensors (info: they publish to the Pi's broker) -------
+
+zigbee:
+  devices:
+    - ieee: "GARAGE_DOOR_IEEE"
+      location: garage_door
+      type: door_contact
+    - ieee: "MAIN_DOOR_IEEE"
+      location: main_door
+      type: door_contact
+    - ieee: "BACKYARD_DOOR_IEEE"
+      location: backyard_door
+      type: door_contact
+    - ieee: "SIDE_DOOR_IEEE"
+      location: side_door
+      type: door_contact
+    - ieee: "WALL_PLUG_IEEE"
+      location: wall_plug
+      type: smart_plug

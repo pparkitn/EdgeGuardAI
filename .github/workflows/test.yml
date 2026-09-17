@@ -1,0 +1,39 @@
+# CI: lint + compile + unit tests on push / PR.
+#
+# No Jetson hardware here: the test suite mocks external systems.
+# - MQTT: the publisher degrades offline (no broker needed)
+# - Polly / Google Cast / cameras: not imported by any test
+# - requirements-dev.txt installs only the minimal deps, so no
+#   insightface/opencv/pychromecast/boto3 code can even run in CI
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip -q
+          pip install -r requirements-dev.txt -q
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Compile checks (compileall)
+        run: python -m compileall -q \
+          events.py edgeguard_config.py enroll.py \
+          face_recognition cameras voice scripts tests
+
+      - name: Tests (pytest)
+        run: pytest

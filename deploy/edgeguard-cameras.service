@@ -1,0 +1,16 @@
+[Unit]
+Description=EdgeGuard AI - Camera Service (RTSP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pparkitn
+WorkingDirectory=/home/pparkitn/edgeguard
+EnvironmentFile=/home/pparkitn/edgeguard/cameras.env
+ExecStart=/home/pparkitn/py38env/bin/python -m cameras.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

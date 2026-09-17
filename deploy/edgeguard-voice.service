@@ -1,0 +1,20 @@
+[Unit]
+Description=EdgeGuard AI - Voice Broadcaster
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/edgeguard
+EnvironmentFile=/home/pi/edgeguard/voice.env
+ExecStart=/home/pi/edgeguard/.venv/bin/python -m voice.broadcaster
+Restart=always
+RestartSec=10
+# ALSA (pygame) floods stderr with "underrun" messages; our structured
+# logs go to stdout -> journald, so drop stderr entirely
+StandardOutput=journal
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

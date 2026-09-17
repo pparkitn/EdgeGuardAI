@@ -1,0 +1,8 @@
+numpy
+opencv-python
+insightface
+onnxruntime
+scikit-learn
+paho-mqtt
+imageio-ffmpeg
+PyYAML

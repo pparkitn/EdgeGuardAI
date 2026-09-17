@@ -1,0 +1,6 @@
+paho-mqtt
+pychromecast
+boto3
+pygame
+schedule
+PyYAML

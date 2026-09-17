@@ -1,0 +1,31 @@
+# Face data
+data/faces/*
+data/embeddings/*
+data/unknown_faces/*
+!data/faces/.gitkeep
+!data/embeddings/.gitkeep
+!data/unknown_faces/.gitkeep
+
+# Real config (contains LAN IPs) - commit config.yaml.example instead
+config.yaml
+
+# Models
+models/*
+!models/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime
+logs/*
+*.log
+*.db
+data/audio/*
+!data/audio/.gitkeep
+
+# IDE
+.vscode/
+.idea/
