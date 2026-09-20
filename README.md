@@ -130,7 +130,7 @@ Measured on the **NVIDIA Jetson Xavier NX** (JetPack 4.4) against live camera st
 
 | Metric | Value |
 |---|---|
-| Hardware | Jetson Xavier NX, CPU-only inference (onnxruntime; TensorRT/GPU optimization planned) |
+| Hardware | Jetson Xavier NX, CPU-only baseline (onnxruntime) — see the [Jetson GPU section](#-jetson-gpu-acceleration-jetson_gpu) below |
 | Camera streams | 2 × 1080p-class (back yard + garage, processed 960×720 @ 2 FPS) |
 | Face database | 12 people / 42 embeddings |
 | **Detection latency** (insightface `buffalo_l`, det_size 640) | **439 ms avg / 448 ms p95** |
@@ -149,13 +149,48 @@ ssh pparkitn@JETSON_IP 'cd ~/edgeguard && PYTHONPATH=. \
   ~/py38env/bin/python -u scripts/benchmark_jetson.py'
 ```
 
-**Interpretation:** detection dominates the pipeline (99 % of frame time) — recognition and MQTT are negligible at this scale. Current throughput comfortably supports the configured 2 FPS processing rate; the next optimization step is **TensorRT/GPU inference** (JetPack 4.4 → onnxruntime-gpu or TensorRT engines), which typically gives 5–10× on detection.
+**Interpretation:** detection dominates the pipeline (99 % of frame time) — recognition and MQTT are negligible at this scale. Current throughput comfortably supports the configured 2 FPS processing rate. With the `jetson_gpu` TensorRT module (below) detection drops to ~50 ms on the Volta GPU.
+
+---
+
+## 🚀 Jetson GPU Acceleration (`jetson_gpu`)
+
+The Jetson runs the same camera service on its **Volta GPU** via TensorRT — a self-contained module that leaves the CPU pipeline (`cameras/` + `face_recognition/`) untouched for other devices.
+
+### How it works
+
+- The two insightface `buffalo_l` ONNX models (`det_10g` detector, `w600k_r50` recognition) are converted to **fixed-shape fp16 TensorRT engines** with `trtexec` (`scripts/convert_engines.sh`) and executed through the `tensorrt` Python bindings + pycuda.
+- Detection decode (SCRFD anchors, distance-to-bbox/keypoints, NMS) and face alignment (`norm_crop` / Umeyama) are **ported from insightface and scikit-image** into pure numpy (`jetson_gpu/scrfd.py`, `jetson_gpu/align.py`) — bit-identical math, so GPU embeddings match the CPU-enrolled database (measured cosine 0.948; recognition still resolves the right person).
+- Because CUDA contexts are thread-bound in pycuda 2020.1 / TensorRT 7, all inference runs on a **dedicated GPU worker thread** (context, engine buffers and streams are created inside it); the camera agent threads simply queue frames and wait for results.
+- **CPU fallback is automatic**: if the engines or `tensorrt`/`pycuda` are unavailable, `GpuFaceDetector` drops back to insightface on onnxruntime — the service never fails to start.
+
+### Measured on-device (JetPack 4.4, live cameras, 2026-09-20)
+
+| Metric | CPU pipeline | TensorRT GPU |
+|---|---|---|
+| Detect + embed latency | 439 ms avg (detect only) | **~50 ms** (43–60 ms) |
+| Embedding vs CPU pipeline | — | cosine **0.948** (fp16) |
+| Recognition vs enrolled DB | baseline | matches (`piotr` 0.948) |
+| Service CPU (2 cameras @ 2 FPS) | ~530 % | **~270 %** |
+| Live-log errors | — | 0 (stream watchdog included) |
+
+### Deploy & run (Jetson)
+
+```bash
+# 1. ship code + build engines (trtexec; ~5 min) — or INSTALL_SERVICE=1 for systemd
+CONVERT_ENGINES=1 ./scripts/deploy_cameras_gpu.sh
+
+# 2. start the GPU service (falls back to CPU automatically)
+python3 -m jetson_gpu.main        # JetPack 4.4: system python 3.6 (TRT bindings are py36-only)
+```
+
+Notes for JetPack 4.4: `pycuda` builds with `--no-build-isolation` + `CFLAGS=-I/usr/local/cuda/include`; pin `imageio-ffmpeg==0.4.9` (no `importlib.resources` on py36); `events.py` and `cameras/stream.py` are py36-compatible by design. The stream watchdog (`vision.stream_timeout`, default 15 s) reconnects silently-hung Reolink sessions.
 
 ---
 
 ## 🧩 Status
 
-- ✅ Face recognition (USB + 2 Reolink cameras) · MQTT event bus · voice broadcast (4 speakers + Pi) · scheduler (15 announcements) · false-alarm grace · central config · systemd deployment
-- 🔜 Zigbee → event-bus bridging/correlation · security decision engine · armed/disarmed state · dashboard
+- ✅ Face recognition (USB + 2 Reolink cameras) · MQTT event bus · voice broadcast (4 speakers + Pi) · scheduler (15 announcements) · false-alarm grace · central config · systemd deployment · **TensorRT GPU camera service running live on the Jetson** (`jetson_gpu`, CPU fallback intact)
+- 🔜 Zigbee → event-bus bridging/correlation · security decision engine · armed/disarmed state · dashboard · sub-stream decoding (ffmpeg CPU is now the bottleneck) · GPU service under systemd
 
 Built on the **NVIDIA Jetson Xavier NX**, **Raspberry Pi 3**, **Reolink cameras**, **Zigbee sensors**, **Google Home speakers**, **AWS Polly**.

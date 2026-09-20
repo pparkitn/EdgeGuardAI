@@ -74,6 +74,14 @@ RECONNECT_DELAY = get_float(
     default=3.0,
 )
 
+# Watchdog: if no frame arrives within this many seconds, the stream
+# is considered dead (silently hung camera session) and reconnects
+STREAM_TIMEOUT = get_float(
+    "vision",
+    "stream_timeout",
+    default=15.0,
+)
+
 # --- MQTT / recognition (shared with face_recognition) ---
 
 CAMERA_MQTT_HOST = MQTT_HOST

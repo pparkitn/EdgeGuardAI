@@ -1,0 +1,8 @@
+# Jetson GPU camera service - tensorrt/pycuda come from JetPack + pip.
+# On JetPack 4.4 ensure the tensorrt Python bindings are importable in
+# the py38env venv (copy from /usr/lib/python3.6/dist-packages if absent).
+numpy
+opencv-python
+PyYAML
+paho-mqtt
+pycuda

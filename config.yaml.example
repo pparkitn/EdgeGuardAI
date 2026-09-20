@@ -241,6 +241,22 @@ schedule:
   # - public-IP reporting every 100 s + Google Sheets jobs
   # - vacation countdown (target date 2023-07-09, expired; was dynamic)
 
+# --- jetson gpu camera service (TensorRT; CPU fallback) ------------
+# Used by `python -m jetson_gpu.main` on the Jetson only. The CPU
+# pipeline (cameras/ + face_recognition/) is unchanged for other devices.
+# Engines are built once with scripts/convert_engines.sh (trtexec).
+# det_size must match the built engine (default 640x640).
+
+jetson_gpu:
+  engine_dir: models/engines
+  det_size:
+    width: 640
+    height: 640
+  rec_size: 112
+  # mirror the CPU pipeline's effective detection behavior
+  det_thresh: 0.5
+  nms_thresh: 0.4
+
 # --- zigbee sensors (info: they publish to the Pi's broker) -------
 
 zigbee:

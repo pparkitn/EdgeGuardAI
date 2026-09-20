@@ -1,11 +1,18 @@
 import logging
 import re
+import select
+import shutil
 import subprocess
 from urllib.parse import quote
 
 from edgeguard_config import get
 
-from .config import CAMERA_PASSWORD, FRAME_HEIGHT, FRAME_RATE
+from .config import (
+    CAMERA_PASSWORD,
+    FRAME_HEIGHT,
+    FRAME_RATE,
+    STREAM_TIMEOUT,
+)
 
 logger = logging.getLogger("cameras.stream")
 
@@ -25,9 +32,22 @@ def get_ffmpeg_binary() -> str:
     if configured:
         return configured
 
-    from imageio_ffmpeg import get_ffmpeg_exe
+    try:
 
-    return get_ffmpeg_exe()
+        from imageio_ffmpeg import get_ffmpeg_exe
+
+        return get_ffmpeg_exe()
+
+    except ImportError:
+
+        # imageio-ffmpeg not installed (e.g. Jetson system python);
+        # fall back to a system ffmpeg on PATH before giving up.
+        on_path = shutil.which("ffmpeg")
+
+        if on_path:
+            return on_path
+
+        raise
 
 
 def build_url(camera: dict) -> str:
@@ -154,8 +174,9 @@ class RtspStream:
 
         result = subprocess.run(
             args,
-            capture_output=True,
-            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
             timeout=15,
         )
 
@@ -184,7 +205,12 @@ class RtspStream:
     def read_frame(self):
 
         """Reads one BGR frame (bytes -> ndarray),
-        or None on stream end / failure."""
+        or None on stream end / failure / stall.
+
+        Waits for data with a watchdog timeout so a silently hung
+        camera session (ESTABLISHED TCP, no data) is treated as a
+        dead stream instead of blocking forever.
+        """
 
         if self.proc is None:
             return None
@@ -194,6 +220,23 @@ class RtspStream:
         bytes_per_frame = width * height * 3
 
         try:
+
+            ready, _, _ = select.select(
+                [self.proc.stdout],
+                [],
+                [],
+                STREAM_TIMEOUT,
+            )
+
+            if not ready:
+
+                logger.warning(
+                    "No frame within %.0f s; "
+                    "stream considered dead",
+                    STREAM_TIMEOUT,
+                )
+
+                return None
 
             data = self.proc.stdout.read(
                 bytes_per_frame

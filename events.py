@@ -9,6 +9,20 @@ from edgeguard_config import get, get_int
 
 logger = logging.getLogger(__name__)
 
+# paho-mqtt 2.x renamed the constructor argument; 1.x (Jetson system
+# python3.6) has no CallbackAPIVersion at all. Compatible with both.
+if hasattr(mqtt, "CallbackAPIVersion"):
+
+    _MQTT_CLIENT_KWARGS = {
+        "callback_api_version": (
+            mqtt.CallbackAPIVersion.VERSION2
+        )
+    }
+
+else:
+
+    _MQTT_CLIENT_KWARGS = {}
+
 DEFAULT_MQTT_HOST = get(
     "broker",
     "host",
@@ -90,7 +104,7 @@ class MqttPublisher:
         )
 
         self.client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2,
+            **_MQTT_CLIENT_KWARGS
         )
 
         self.client.on_connect = (
