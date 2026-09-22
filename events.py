@@ -19,9 +19,17 @@ if hasattr(mqtt, "CallbackAPIVersion"):
         )
     }
 
+    def _wait_for_publish(result):
+
+        result.wait_for_publish(timeout=5)
+
 else:
 
     _MQTT_CLIENT_KWARGS = {}
+
+    def _wait_for_publish(result):
+
+        result.wait_for_publish()
 
 DEFAULT_MQTT_HOST = get(
     "broker",
@@ -186,9 +194,7 @@ class MqttPublisher:
                 qos=1,
             )
 
-            result.wait_for_publish(
-                timeout=5,
-            )
+            _wait_for_publish(result)
 
             return True
 

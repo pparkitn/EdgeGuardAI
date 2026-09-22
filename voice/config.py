@@ -84,12 +84,12 @@ LOCAL_PLAYBACK = get_bool(
 
 # --- Announcement policy ---
 
-# Announce when a known person is recognized (disabled by default:
-# only unknown-person events are announced)
+# Announce when a known person is recognized
+# (unknown-person events are always announced)
 ANNOUNCE_RECOGNIZED = get_bool(
     "voice",
     "announce_recognized",
-    default=False,
+    default=True,
 )
 
 # Minimum seconds between announcements of the same event type

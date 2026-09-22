@@ -98,7 +98,7 @@ voice:
   http_port: 8000
   local_playback: true
   interrupt_playback: true
-  announce_recognized: false
+  announce_recognized: true
   announcement_cooldown: 60.0
   # if a known person was seen on the same camera within this
   # many seconds, an unknown_person_detected event is NOT announced

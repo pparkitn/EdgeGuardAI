@@ -99,4 +99,6 @@ fi
 
 echo "==> Deploy complete. Start with:"
 echo "    ssh ${JETSON_USER}@${JETSON_HOST} 'cd ${REMOTE_DIR} && EDGEGUARD_CAMERA_PASSWORD=... ~/py38env/bin/python -m jetson_gpu.main'"
+echo "    or (detached, reads cameras.env):"
+echo "    ssh ${JETSON_USER}@${JETSON_HOST} 'cd ${REMOTE_DIR} && setsid bash -c \"cd ${REMOTE_DIR} && set -a && . ./cameras.env && set +a && exec python3 -u -m jetson_gpu.main > /tmp/jetson_cameras_gpu.log 2>&1\" < /dev/null > /dev/null 2>&1 &'"
 echo "    or install the service: INSTALL_SERVICE=1 ./scripts/deploy_cameras_gpu.sh"
