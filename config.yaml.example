@@ -104,6 +104,10 @@ voice:
   # many seconds, an unknown_person_detected event is NOT announced
   # (avoids false alarms from head turns etc.)
   unknown_grace_period: 30.0
+  # wait this many seconds after an unknown detection before
+  # announcing it; cancelled if a known person is recognized
+  # on the same camera in the meantime
+  unknown_confirm_delay: 60.0
 
 announcements:
   templates:

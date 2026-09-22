@@ -116,6 +116,16 @@ UNKNOWN_GRACE_PERIOD = get_float(
     default=30.0,
 )
 
+# Wait this many seconds after an unknown detection before
+# announcing it, to see if the person gets recognized. If a known
+# person is recognized on the same camera in the meantime, the
+# unknown announcement is cancelled.
+UNKNOWN_CONFIRM_DELAY = get_float(
+    "voice",
+    "unknown_confirm_delay",
+    default=60.0,
+)
+
 # --- Announcement templates ---
 
 TEMPLATES = get(

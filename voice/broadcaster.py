@@ -27,6 +27,7 @@ from .config import (
     MQTT_PORT,
     MQTT_TOPIC,
     PROJECT_ROOT,
+    UNKNOWN_CONFIRM_DELAY,
     UNKNOWN_GRACE_PERIOD,
 )
 from .delivery import DeliveryWorker
@@ -122,6 +123,8 @@ class Broadcaster:
         self.last_announcement = {}
 
         self.last_known_seen = {}
+
+        self._pending_unknown = {}
 
         self.lan_ip = get_lan_ip()
 
@@ -271,6 +274,22 @@ class Broadcaster:
 
             self.last_known_seen[camera_id] = now
 
+            pending = self._pending_unknown.pop(
+                camera_id,
+                None,
+            )
+
+            if pending is not None:
+
+                pending.cancel()
+
+                logger.info(
+                    "Unknown announcement for %s "
+                    "cancelled: %s recognized",
+                    camera_id,
+                    event.get("person_id"),
+                )
+
             if not ANNOUNCE_RECOGNIZED:
 
                 logger.info(
@@ -281,6 +300,16 @@ class Broadcaster:
                 return
 
         if event_type == "unknown_person_detected":
+
+            if camera_id in self._pending_unknown:
+
+                logger.info(
+                    "Unknown detection on %s already "
+                    "pending confirmation",
+                    camera_id,
+                )
+
+                return
 
             last_known = self.last_known_seen.get(
                 camera_id,
@@ -300,6 +329,35 @@ class Broadcaster:
 
                 return
 
+            if not self._cooldown_ok(event_type):
+
+                logger.info(
+                    "Announcement for %s in cooldown",
+                    event_type,
+                )
+
+                return
+
+            timer = threading.Timer(
+                UNKNOWN_CONFIRM_DELAY,
+                self._announce_unknown,
+                args=(event,),
+            )
+
+            self._pending_unknown[camera_id] = timer
+
+            timer.start()
+
+            logger.info(
+                "Unknown detection on %s scheduled; "
+                "announcing in %.0fs unless a known "
+                "person appears",
+                camera_id,
+                UNKNOWN_CONFIRM_DELAY,
+            )
+
+            return
+
         text = build_announcement(event)
 
         if text is None:
@@ -315,6 +373,39 @@ class Broadcaster:
 
             logger.info(
                 "Announcement for %s in cooldown",
+                event_type,
+            )
+
+            return
+
+        self.announce(event_type, text)
+
+    def _announce_unknown(self, event: dict):
+
+        camera_id = event.get("camera_id")
+
+        self._pending_unknown.pop(
+            camera_id,
+            None,
+        )
+
+        event_type = event.get("event_type")
+
+        if not self._cooldown_ok(event_type):
+
+            logger.info(
+                "Deferred %s in cooldown; skipped",
+                event_type,
+            )
+
+            return
+
+        text = build_announcement(event)
+
+        if text is None:
+
+            logger.debug(
+                "No announcement template for %s",
                 event_type,
             )
 
@@ -396,6 +487,14 @@ class Broadcaster:
     def stop(self):
 
         self.running = False
+
+        for camera_id, timer in list(
+            self._pending_unknown.items()
+        ):
+
+            timer.cancel()
+
+        self._pending_unknown.clear()
 
         if self.scheduler is not None:
 
