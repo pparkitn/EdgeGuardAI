@@ -109,6 +109,14 @@ voice:
   # on the same camera in the meantime
   unknown_confirm_delay: 60.0
 
+# --- Sony BRAVIA TV (REST IP control) -----------------------------
+# PSK is a secret: set it in your per-device config.yaml or via
+# EDGEGUARD_BRAVIA_PSK, never here.
+bravia:
+  host: 192.168.2.233
+  port: 80
+  psk: ""
+
 announcements:
   templates:
     unknown_person_detected: "Security alert. An unknown person has been detected at {location}."
