@@ -1,8 +1,10 @@
 import logging
+import os
 import re
 import select
 import shutil
 import subprocess
+import time
 from urllib.parse import quote
 
 from edgeguard_config import get
@@ -207,9 +209,10 @@ class RtspStream:
         """Reads one BGR frame (bytes -> ndarray),
         or None on stream end / failure / stall.
 
-        Waits for data with a watchdog timeout so a silently hung
-        camera session (ESTABLISHED TCP, no data) is treated as a
-        dead stream instead of blocking forever.
+        Reads incrementally on a non-blocking pipe with a watchdog
+        deadline so BOTH a silently hung session (no data) and a
+        stall mid-frame (partial data, then nothing) are treated as
+        a dead stream instead of blocking forever.
         """
 
         if self.proc is None:
@@ -219,28 +222,70 @@ class RtspStream:
 
         bytes_per_frame = width * height * 3
 
+        fd = self.proc.stdout.fileno()
+
+        buf = b""
+
         try:
 
-            ready, _, _ = select.select(
-                [self.proc.stdout],
-                [],
-                [],
-                STREAM_TIMEOUT,
-            )
+            os.set_blocking(fd, False)
 
-            if not ready:
+            deadline = time.time() + STREAM_TIMEOUT
 
-                logger.warning(
-                    "No frame within %.0f s; "
-                    "stream considered dead",
-                    STREAM_TIMEOUT,
+            while len(buf) < bytes_per_frame:
+
+                remaining = deadline - time.time()
+
+                if remaining <= 0:
+
+                    logger.warning(
+                        "No full frame within %.0f s; "
+                        "stream considered dead",
+                        STREAM_TIMEOUT,
+                    )
+
+                    return None
+
+                ready, _, _ = select.select(
+                    [fd],
+                    [],
+                    [],
+                    remaining,
                 )
 
-                return None
+                if not ready:
 
-            data = self.proc.stdout.read(
-                bytes_per_frame
-            )
+                    logger.warning(
+                        "No full frame within %.0f s; "
+                        "stream considered dead",
+                        STREAM_TIMEOUT,
+                    )
+
+                    return None
+
+                try:
+
+                    chunk = os.read(
+                        fd,
+                        bytes_per_frame - len(buf),
+                    )
+
+                except BlockingIOError:
+
+                    continue
+
+                if not chunk:
+
+                    logger.warning(
+                        "Short frame read (%d/%d); "
+                        "stream ended",
+                        len(buf),
+                        bytes_per_frame,
+                    )
+
+                    return None
+
+                buf += chunk
 
         except Exception:
 
@@ -250,21 +295,20 @@ class RtspStream:
 
             return None
 
-        if len(data) != bytes_per_frame:
+        finally:
 
-            logger.warning(
-                "Short frame read (%d/%d); "
-                "stream ended",
-                len(data),
-                bytes_per_frame,
-            )
+            try:
 
-            return None
+                os.set_blocking(fd, True)
+
+            except OSError:
+
+                pass
 
         import numpy as np
 
         return np.frombuffer(
-            data,
+            buf,
             dtype=np.uint8,
         ).reshape(height, width, 3)
 
