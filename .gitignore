@@ -29,3 +29,5 @@ data/audio/*
 # IDE
 .vscode/
 .idea/
+# Local agent context - intentionally NOT in git (contains LAN topology/secrets)
+AGENTS.md
