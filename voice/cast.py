@@ -140,6 +140,24 @@ class SpeakerManager:
 
             try:
 
+                # Android TVs can hold a stuck app session (e.g.
+                # YouTube with a connected sender) that ignores
+                # media.stop() and LOAD; quit the app first so the
+                # Default Media Receiver can take over.
+                if hasattr(cast, "quit_app"):
+
+                    cast.quit_app()
+
+            except Exception:
+
+                logger.debug(
+                    "quit_app failed on %s",
+                    cast.name,
+                    exc_info=True,
+                )
+
+            try:
+
                 media.stop()
 
             except Exception:
