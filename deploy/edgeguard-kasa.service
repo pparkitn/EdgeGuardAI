@@ -1,0 +1,13 @@
+[Unit]
+Description=EdgeGuard Kasa plug controller
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/pi/edgeguard
+ExecStart=/home/pi/edgeguard/.venv/bin/python -m kasa_control
+Restart=always
+RestartSec=5
+User=pi
+
+[Install]
+WantedBy=multi-user.target

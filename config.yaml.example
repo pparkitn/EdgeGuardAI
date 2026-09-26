@@ -117,6 +117,17 @@ bravia:
   port: 80
   psk: ""
 
+# --- Kasa smart plugs (MQTT-controlled, python-kasa) --------------
+kasa:
+  plugs:
+    - name: back_yard_lights
+      host: 192.168.2.216
+    # multi-outlet devices: pick a socket by child_id
+    # (get it from the kasa CLI / device sysinfo)
+    # - name: front_lights
+    #   host: 192.168.2.214
+    #   child_id: ""
+
 announcements:
   templates:
     unknown_person_detected: "Security alert. An unknown person has been detected at {location}."
