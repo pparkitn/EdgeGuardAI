@@ -1,3 +1,4 @@
+import json
 import time
 from unittest import mock
 
@@ -18,6 +19,8 @@ def make_broadcaster():
     bc._pending_unknown = {}
 
     bc.announce = mock.Mock()
+
+    bc.say = mock.Mock()
 
     return bc
 
@@ -104,5 +107,78 @@ def test_duplicate_unknown_events_schedule_once():
     bc.handle_event(UNKNOWN)
 
     time.sleep(0.3)
+
+    assert bc.announce.call_count == 1
+
+
+class FakeMsg:
+
+    def __init__(self, topic, payload):
+
+        self.topic = topic
+
+        self.payload = payload
+
+
+def test_say_command_json_payload():
+
+    bc = make_broadcaster()
+
+    msg = FakeMsg(
+        broadcaster.SAY_TOPIC,
+        json.dumps({"text": "hello"}).encode(),
+    )
+
+    bc._on_message(None, None, msg)
+
+    bc.say.assert_called_once_with("hello")
+
+
+def test_say_command_raw_text():
+
+    bc = make_broadcaster()
+
+    bc._on_message(
+        None,
+        None,
+        FakeMsg(
+            broadcaster.SAY_TOPIC,
+            b"raw text message",
+        ),
+    )
+
+    bc.say.assert_called_once_with("raw text message")
+
+
+def test_say_command_ignores_empty():
+
+    bc = make_broadcaster()
+
+    bc._on_message(
+        None,
+        None,
+        FakeMsg(
+            broadcaster.SAY_TOPIC,
+            b'{"text": "  "}',
+        ),
+    )
+
+    bc.say.assert_not_called()
+
+
+def test_say_command_does_not_touch_camera_events():
+
+    bc = make_broadcaster()
+
+    bc._on_message(
+        None,
+        None,
+        FakeMsg(
+            "edgeguard/camera/garage",
+            json.dumps(RECOGNIZED).encode(),
+        ),
+    )
+
+    bc.say.assert_not_called()
 
     assert bc.announce.call_count == 1

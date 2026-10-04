@@ -34,7 +34,7 @@ Camera detects & recognizes a person  →  MQTT event  →  Security decision  �
 | 🧠 **Face recognition** | insightface `buffalo_l` embeddings, cosine matching, 12 enrolled people |
 | 📡 **MQTT event bus** | Jetson Mosquitto broker; `edgeguard/camera/<id>` topics, JSON events |
 | 🔔 **Voice broadcaster** | AWS Polly TTS → Pi local speaker + Google Cast (4 speakers) |
-| 🕐 **Scheduler** | 15 ported family announcements (school, Kumon, dishwasher…) with per-speaker targeting |
+| 🕐 **Scheduler** | 15 ported family announcements (school, dishwasher…) with per-speaker targeting |
 | 🚪 **Zigbee sensors** | 4 door contacts + smart plug via Zigbee2MQTT (bridge pending) |
 | 🛡️ **Privacy by design** | face images/embeddings never leave the LAN or the repo |
 

@@ -35,9 +35,11 @@ class Scheduler:
     local speaker and the Google Cast speakers.
     """
 
-    def __init__(self, say):
+    def __init__(self, say, actions=None):
 
         self.say = say
+
+        self.actions = actions or {}
 
         self.thread = None
 
@@ -59,10 +61,11 @@ class Scheduler:
 
         every = definition.get("every")
 
-        if text is None:
+        if text is None and not definition.get("action"):
+
             logger.warning(
-                "Scheduled message without text "
-                "ignored: %s",
+                "Scheduled definition without text or "
+                "action ignored: %s",
                 definition,
             )
             return
@@ -134,9 +137,39 @@ class Scheduler:
     def _fire(self, text, definition):
 
         logger.info(
-            "Scheduled announcement fired: %s",
-            text,
+            "Scheduled definition fired: %s",
+            definition,
         )
+
+        action = definition.get("action")
+
+        if action is not None:
+
+            handler = self.actions.get(action)
+
+            if handler is None:
+
+                logger.warning(
+                    "Unknown scheduled action: %s",
+                    action,
+                )
+
+            else:
+
+                try:
+
+                    handler()
+
+                except Exception:
+
+                    logger.exception(
+                        "Scheduled action failed: %s",
+                        action,
+                    )
+
+        if text is None:
+
+            return
 
         try:
 

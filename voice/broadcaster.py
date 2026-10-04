@@ -15,6 +15,8 @@ import time
 
 import paho.mqtt.client as mqtt
 
+from bravia import BraviaClient
+
 from .announcements import build_announcement
 from .cast import SpeakerManager
 from .config import (
@@ -27,6 +29,7 @@ from .config import (
     MQTT_PORT,
     MQTT_TOPIC,
     PROJECT_ROOT,
+    SAY_TOPIC,
     UNKNOWN_CONFIRM_DELAY,
     UNKNOWN_GRACE_PERIOD,
 )
@@ -160,6 +163,9 @@ class Broadcaster:
 
         self.scheduler = Scheduler(
             self.say,
+            actions={
+                "tv_off": self._tv_off,
+            },
         )
 
         self.scheduler.load()
@@ -225,6 +231,11 @@ class Broadcaster:
                 qos=1,
             )
 
+            client.subscribe(
+                SAY_TOPIC,
+                qos=1,
+            )
+
         else:
 
             logger.warning(
@@ -238,6 +249,12 @@ class Broadcaster:
         userdata,
         msg,
     ):
+
+        if msg.topic == SAY_TOPIC:
+
+            self._handle_say_command(msg)
+
+            return
 
         try:
 
@@ -255,6 +272,53 @@ class Broadcaster:
             return
 
         self.handle_event(event)
+
+    def _handle_say_command(self, msg):
+
+        """Ad-hoc announcement: speak arbitrary text on all speakers.
+
+        Payload is either JSON {"text": "..."} or a raw string.
+        Bypasses event cooldowns on purpose (explicit user command).
+        """
+
+        try:
+
+            payload = json.loads(
+                msg.payload.decode()
+            )
+
+            if isinstance(payload, dict):
+
+                text = payload.get("text")
+
+            else:
+
+                text = payload
+
+        except (json.JSONDecodeError, UnicodeDecodeError):
+
+            text = msg.payload.decode(
+                errors="replace"
+            )
+
+        text = (text or "").strip()
+
+        if not text:
+
+            logger.warning(
+                "Empty say command on %s ignored",
+                msg.topic,
+            )
+
+            return
+
+        logger.info(
+            "Say command on %s: %s",
+            msg.topic,
+            text,
+        )
+
+        self.say(text)
 
     def handle_event(self, event: dict):
 
@@ -454,6 +518,39 @@ class Broadcaster:
             speakers=speakers,
             local=local,
         )
+
+    def _tv_off(self):
+
+        """Scheduled action: power the Bravia TV off (if on)."""
+
+        logger.info(
+            "Scheduled action: tv_off"
+        )
+
+        try:
+
+            client = BraviaClient()
+
+            status = client.power_status()
+
+            logger.info(
+                "TV power status: %s",
+                status,
+            )
+
+            if status.lower() not in ("off", "standby"):
+
+                client.set_power(False)
+
+                logger.info(
+                    "TV powered off"
+                )
+
+        except Exception:
+
+            logger.exception(
+                "Scheduled TV power-off failed"
+            )
 
     def announce(self, event_type: str, text: str):
 

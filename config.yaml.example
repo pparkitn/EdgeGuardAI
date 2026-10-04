@@ -29,6 +29,9 @@ broker:
   host: JETSON_IP
   port: 1883
   topic_prefix: edgeguard
+  # ad-hoc announcement topic: publish {"text": "..."} (or raw text)
+  # to speak any message on all speakers (see scripts/say.py)
+  say_topic: edgeguard/command/say
 
 jetson:
   host: JETSON_IP
@@ -146,7 +149,9 @@ announcements:
 # time:  "HH:MM" (24h, local time on the broadcaster machine)
 # days:  optional weekday list; omitted = every day
 # every: alternative to time/days - interval in seconds
-# text:  what Polly will say
+# text:  what Polly will say (omit for action-only entries)
+# action: optional; name of a scheduled action the broadcaster knows
+#         (currently only "tv_off" - powers the Bravia TV off)
 # speakers: optional list of Google Cast targets; absent = ALL speakers
 # local:  optional; false = do not play on this machine's speaker
 #         (legacy semantics: cast-only entries had local playback off)
@@ -186,11 +191,6 @@ schedule:
     local: false
     text: "Natalia, time to empty the dishwasher."
 
-  - time: "16:30"
-    speakers: ["Kitchen Speaker"]
-    local: false
-    text: "Don't forget to do your Kumon homework!"
-
   - time: "21:00"
     speakers:
       - "Bedroom  speaker"
@@ -198,34 +198,12 @@ schedule:
     local: false
     text: "Natalia, time to empty the dishwasher."
 
-  - time: "21:00"
-    speakers: ["Kitchen Speaker"]
-    local: false
-    text: "Don't forget to do your Kumon homework!"
-
   - time: "21:30"
     speakers:
       - "Kitchen Speaker"
       - "Bedroom  speaker"
     local: false
     text: "Good night, kids! Time to go to sleep."
-
-  # --- tuesday ---
-  - time: "16:20"
-    days: [tuesday]
-    speakers:
-      - "Kitchen Speaker"
-      - "Natalia speaker"
-    local: false
-    text: "Time to drive to Kumon. Get your things ready!"
-
-  - time: "17:20"
-    days: [tuesday]
-    speakers:
-      - "Kitchen Speaker"
-      - "Natalia speaker"
-    local: false
-    text: "Time to pick up from Kumon."
 
   # --- wednesday ---
   - time: "17:00"
@@ -235,29 +213,6 @@ schedule:
       - "Bedroom  speaker"
     local: true
     text: "Don't forget, it's rock climbing day!"
-
-  - time: "21:03"
-    days: [wednesday]
-    speakers: ["Kitchen Speaker"]
-    local: false
-    text: "Don't forget to do your Kumon homework!"
-
-  # --- thursday ---
-  - time: "16:20"
-    days: [thursday]
-    speakers:
-      - "Kitchen Speaker"
-      - "Natalia speaker"
-    local: false
-    text: "Time to drive to Kumon. Get your things ready!"
-
-  - time: "17:20"
-    days: [thursday]
-    speakers:
-      - "Kitchen Speaker"
-      - "Natalia speaker"
-    local: false
-    text: "Time to pick up from Kumon."
 
   # --- not ported (not voice announcements) ---
   # - wall plug ON 20:00 / OFF 23:30 (Zigbee MQTT control)

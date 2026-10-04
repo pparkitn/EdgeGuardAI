@@ -30,6 +30,14 @@ MQTT_TOPIC = get(
     default="edgeguard",
 ) + "/#"
 
+# Ad-hoc announcement command topic: the broadcaster listens here
+# for {"text": "..."} (or raw text) and speaks it on all speakers
+SAY_TOPIC = get(
+    "broker",
+    "say_topic",
+    default="edgeguard/command/say",
+)
+
 # --- AWS Polly ---
 
 POLLY_REGION = get(

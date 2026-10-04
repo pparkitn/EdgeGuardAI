@@ -115,7 +115,7 @@ schedule:
 ```
 
 - `days` accepts full or short weekday names (`monday`…`sunday` / `mon`…`sun`); omitted = every day.
-- All 15 legacy HomeAuto announcements (school, Kumon, dishwasher, climbing, bedtime…) are ported with their original times and speaker targets — see `config.yaml`. "Family Room speaker" was dropped (not on the LAN anymore).
+- All 15 legacy HomeAuto announcements (school, dishwasher, climbing, bedtime…) are ported with their original times and speaker targets — see `config.yaml`. "Family Room speaker" was dropped (not on the LAN anymore).
 - Not ported (not voice announcements): the Zigbee wall-plug ON/OFF control, IP reporting, Google Sheets jobs, and the expired vacation countdown.
 - Verified live: a targeted test announcement played on the Kitchen Speaker only.
 
