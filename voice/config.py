@@ -93,10 +93,16 @@ LOCAL_PLAYBACK = get_bool(
 # --- Announcement policy ---
 
 # Announce when a known person is recognized
-# (unknown-person events are always announced)
 ANNOUNCE_RECOGNIZED = get_bool(
     "voice",
     "announce_recognized",
+    default=True,
+)
+
+# Announce when an unknown person is detected
+ANNOUNCE_UNKNOWN = get_bool(
+    "voice",
+    "announce_unknown",
     default=True,
 )
 

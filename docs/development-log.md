@@ -147,3 +147,14 @@ Hands-on findings across the multi-machine system, cameras, and speakers.
 - Claims must match implementation: reworded "correlates camera + Zigbee" → "designed around event correlation … Zigbee integration under development"; README documents 4 speakers everywhere (stale "3" fixed in architecture.md/deployment.md/voice-broadcasting.md).
 - Rebranded as **"Distributed Edge AI Security Platform"** (job-search positioning); added Reliability section (async delivery + isolated channels), measured Performance section, note that demo face images aren't in the repo.
 - Architecture PDF (`docs/EdgeGuard_AI_Architecture.pdf`) added and linked; repo has a single commit + single `v1.0.0` tag.
+
+---
+
+### Session Learnings (2026-10-04)
+
+**Configurable unknown-person announcements**
+
+- User asked to stop speakers announcing unknown-person detections. Added `ANNOUNCE_UNKNOWN` (`voice/config.py`, from `voice:announce_unknown`, default `true` so existing setups are unchanged) and an early-return in `Broadcaster.handle_event` for `unknown_person_detected` (`voice/broadcaster.py`) — when disabled, no confirm-delay timer is even scheduled, so nothing is spoken. Camera events + snapshots are unaffected (recording happens on the Jetson pipeline, not the Pi).
+- Test added (`tests/test_broadcaster.py::test_unknown_not_announced_when_disabled`); 64 tests pass, ruff clean.
+- Deployed live: `PI_HOST=192.168.2.168 ./scripts/deploy_voice.sh` (rsync code), `announce_unknown: false` added under `voice:` in `/home/pi/edgeguard/config.yaml`, `sudo systemctl restart edgeguard-voice` → active; startup log clean (MQTT/Polly/pygame/HTTP all up).
+- Note: `voice/config.py` no longer carries the "(unknown-person events are always announced)" comment — unknown announcements are now policy-controllable like recognized ones.

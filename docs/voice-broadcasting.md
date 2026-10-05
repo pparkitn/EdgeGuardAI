@@ -66,7 +66,7 @@ The broadcaster is self-contained: it embeds the HTTP server that serves cached 
 
 | Event | Action |
 |---|---|
-| `unknown_person_detected` | announced: *"Security alert. An unknown person has been detected at the front entrance."* |
+| `unknown_person_detected` | announced: *"Security alert. An unknown person has been detected at the front entrance."* (can be disabled entirely with `voice:announce_unknown: false` in `config.yaml`) |
 | `person_recognized` | logged only (`ANNOUNCE_RECOGNIZED = False` by default) |
 | Unknown event types | ignored |
 

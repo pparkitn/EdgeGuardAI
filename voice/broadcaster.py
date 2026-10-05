@@ -21,6 +21,7 @@ from .announcements import build_announcement
 from .cast import SpeakerManager
 from .config import (
     ANNOUNCE_RECOGNIZED,
+    ANNOUNCE_UNKNOWN,
     ANNOUNCEMENT_COOLDOWN,
     AUDIO_DIR,
     HTTP_PORT,
@@ -364,6 +365,15 @@ class Broadcaster:
                 return
 
         if event_type == "unknown_person_detected":
+
+            if not ANNOUNCE_UNKNOWN:
+
+                logger.info(
+                    "Unknown-person announcements "
+                    "disabled"
+                )
+
+                return
 
             if camera_id in self._pending_unknown:
 

@@ -98,6 +98,7 @@ Full setup, per-device runbook, and service installs: see **[Deployment](docs/de
 | [Camera Service](docs/camera-service.md) | Reolink RTSP setup, ONVIF stream discovery, ffmpeg decoder, per-camera agents |
 | [Voice Broadcasting](docs/voice-broadcasting.md) | Polly, speakers, delivery channels, false-alarm grace period, scheduled announcements |
 | [Devices](docs/devices.md) | every device & sensor with photos and roles |
+| [Remote Control](docs/remote-opencode-tailscale-ssh-tmux.md) | control a running OpenCode session from a phone (Tailscale + SSH + tmux) |
 | [Architecture PDF](docs/EdgeGuard_AI_Architecture.pdf) | printable system architecture overview |
 | [Development Log](docs/development-log.md) | hands-on learnings, quirks, and deployment gotchas |
 

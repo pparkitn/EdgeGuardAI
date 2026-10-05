@@ -102,6 +102,8 @@ voice:
   local_playback: true
   interrupt_playback: true
   announce_recognized: true
+  # set to false to never announce unknown-person detections
+  announce_unknown: true
   announcement_cooldown: 60.0
   # if a known person was seen on the same camera within this
   # many seconds, an unknown_person_detected event is NOT announced

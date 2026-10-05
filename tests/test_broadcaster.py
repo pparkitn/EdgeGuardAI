@@ -60,6 +60,29 @@ def test_unknown_not_announced_immediately():
     assert "garage" in bc._pending_unknown
 
 
+def test_unknown_not_announced_when_disabled():
+
+    original = broadcaster.ANNOUNCE_UNKNOWN
+
+    broadcaster.ANNOUNCE_UNKNOWN = False
+
+    try:
+
+        bc = make_broadcaster()
+
+        bc.handle_event(UNKNOWN)
+
+        time.sleep(0.3)
+
+        bc.announce.assert_not_called()
+
+        assert "garage" not in bc._pending_unknown
+
+    finally:
+
+        broadcaster.ANNOUNCE_UNKNOWN = original
+
+
 def test_unknown_announced_after_confirm_delay():
 
     bc = make_broadcaster()
