@@ -33,6 +33,8 @@ rsync -az \
     "${APP_DIR}/edgeguard_config.py" \
     "${APP_DIR}/config.yaml.example" \
     "${APP_DIR}/requirements-voice.txt" \
+    "${APP_DIR}/bravia.py" \
+    "${APP_DIR}/doorbell.py" \
     "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/"
 
 # real config.yaml is per-device (gitignored in the repo) - never overwrite it

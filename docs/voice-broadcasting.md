@@ -102,6 +102,7 @@ alerts:
 - Empty by default — no alerts fire until configured.
 - Rules are evaluated per event, **in addition to** the normal announcement flow; each rule keeps its own cooldown (`cooldown`, default 600 s) independent of the generic `announcement_cooldown`.
 - The alert uses the same targeted `say()` path as the scheduler, so `speakers`/`local` control exactly which devices hear it.
+- Set `siren: true` on a rule to also sound the **doorbell siren** when it fires (via `doorbell.py` / the `doorbell:` config section) — e.g. a loud physical alarm for a night front-door rule.
 
 ### Components (`voice/`)
 

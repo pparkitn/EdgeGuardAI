@@ -122,6 +122,16 @@ bravia:
   port: 80
   psk: ""
 
+# --- Reolink doorbell (siren/alarm, HTTP CGI API) -----------------
+# password is a secret: set it in your per-device config.yaml or via
+# EDGEGUARD_DOORBELL_PASSWORD, never here. Note: the HTTP API needs
+# the doorbell's web/admin password (can differ from the RTSP one).
+doorbell:
+  host: 192.168.2.32
+  port: 80
+  user: admin
+  password: ""
+
 # --- Kasa smart plugs (MQTT-controlled, python-kasa) --------------
 kasa:
   plugs:

@@ -544,6 +544,38 @@ class Broadcaster:
                 local=rule.get("local", True),
             )
 
+            if rule.get("siren"):
+
+                self._sound_doorbell_siren(rule_id)
+
+    def _sound_doorbell_siren(self, rule_id: str):
+
+        try:
+
+            from doorbell import DoorbellClient
+
+            if DoorbellClient().trigger_siren(True):
+
+                logger.info(
+                    "Alert %s: doorbell siren triggered",
+                    rule_id,
+                )
+
+            else:
+
+                logger.warning(
+                    "Alert %s: doorbell siren "
+                    "command failed",
+                    rule_id,
+                )
+
+        except Exception:
+
+            logger.exception(
+                "Alert %s: doorbell siren failed",
+                rule_id,
+            )
+
     def _announce_unknown(self, event: dict):
 
         camera_id = event.get("camera_id")
