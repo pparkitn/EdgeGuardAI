@@ -72,6 +72,7 @@ def build_event(
     confidence: float,
     person_id: str = None,
     camera_id: str = None,
+    face_count: int = None,
 ):
 
     event = {
@@ -88,6 +89,9 @@ def build_event(
 
     if person_id is not None:
         event["person_id"] = person_id
+
+    if face_count is not None:
+        event["face_count"] = face_count
 
     return event
 

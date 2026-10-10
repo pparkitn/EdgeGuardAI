@@ -145,6 +145,36 @@ announcements:
     back_yard: "the back yard"
     garage: "the garage"
 
+# --- alert rules -------------------------------------------------
+# Fire a targeted announcement when a camera emits an event during
+# specific time slots (e.g. multiple faces at the front door overnight).
+#
+#   id:         unique rule id (cooldown bookkeeping)
+#   camera:     camera_id to watch (e.g. "front_door")
+#   event:      event_type that triggers the rule
+#               ("multiple_faces_detected" is emitted by the camera
+#               pipeline when 2+ faces are in one frame)
+#   min_faces:  minimum face_count in the event (default 2)
+#   time_slots: list of {"start": "HH:MM", "end": "HH:MM"}; overnight
+#               ranges (start > end) wrap past midnight
+#   speakers:   optional Google Cast targets; absent = ALL speakers
+#   local:      optional; default true (play on the Pi speaker too)
+#   cooldown:   seconds between alerts from this rule (default 600)
+#   message:    text spoken through the Polly/cast pipeline
+#
+# Empty by default - no alerts fire unless configured.
+alerts:
+  # - id: night_front_door
+  #   camera: front_door
+  #   event: multiple_faces_detected
+  #   min_faces: 2
+  #   time_slots:
+  #     - {start: "01:00", end: "05:00"}
+  #   speakers: ["Bedroom  speaker"]
+  #   local: true
+  #   cooldown: 600
+  #   message: "Multiple people detected at the front door."
+
 # --- scheduled announcements -------------------------------------
 # Ported from the legacy HomeAuto googlecast.py scheduler (same times).
 #

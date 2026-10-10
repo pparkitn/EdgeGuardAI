@@ -41,6 +41,32 @@ def test_build_event_default_camera_id():
     assert event["camera_id"]
 
 
+def test_build_event_multiple_faces_carries_face_count():
+
+    event = build_event(
+        "multiple_faces_detected",
+        1.0,
+        camera_id="front_door",
+        face_count=3,
+    )
+
+    assert event["event_type"] == "multiple_faces_detected"
+    assert event["face_count"] == 3
+    assert "person_id" not in event
+
+
+def test_build_event_omits_face_count_when_unset():
+
+    event = build_event(
+        "person_recognized",
+        0.9,
+        "piotr",
+        camera_id="garage",
+    )
+
+    assert "face_count" not in event
+
+
 def test_publisher_topic_uses_camera_id():
 
     assert (

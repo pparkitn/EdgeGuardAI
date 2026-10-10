@@ -135,6 +135,10 @@ class CameraAgent(threading.Thread):
 
         now = time.time()
 
+        if len(faces) >= 2:
+
+            self._publish_multiple_faces(faces, now)
+
         for face in faces:
 
             name, score = self.recognizer.recognize(
@@ -214,6 +218,39 @@ class CameraAgent(threading.Thread):
             )
 
             self.last_publish_time[name] = now
+
+    def _publish_multiple_faces(self, faces, now):
+
+        last_time = self.last_publish_time.get(
+            "multiple_faces",
+            0.0,
+        )
+
+        if (
+            now - last_time
+            < CAMERA_REPUBLISH_INTERVAL
+        ):
+            return
+
+        from events import build_event
+
+        event = build_event(
+            "multiple_faces_detected",
+            confidence=1.0,
+            camera_id=self.camera_id,
+            face_count=len(faces),
+        )
+
+        if self.publisher.publish(event):
+
+            print(
+                f"[{self.camera_id}] multiple_faces_detected: "
+                f"{len(faces)} face(s)"
+            )
+
+            self.last_publish_time[
+                "multiple_faces"
+            ] = now
 
     def _save_snapshot(self, frame, face):
 

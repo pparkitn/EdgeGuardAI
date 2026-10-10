@@ -20,6 +20,7 @@ from bravia import BraviaClient
 from .announcements import build_announcement
 from .cast import SpeakerManager
 from .config import (
+    ALERTS,
     ANNOUNCE_RECOGNIZED,
     ANNOUNCE_UNKNOWN,
     ANNOUNCEMENT_COOLDOWN,
@@ -33,6 +34,7 @@ from .config import (
     SAY_TOPIC,
     UNKNOWN_CONFIRM_DELAY,
     UNKNOWN_GRACE_PERIOD,
+    time_in_slots,
 )
 from .delivery import DeliveryWorker
 from .local_player import LocalPlayer
@@ -129,6 +131,8 @@ class Broadcaster:
         self.last_known_seen = {}
 
         self._pending_unknown = {}
+
+        self.last_alert_time = {}
 
         self.lan_ip = get_lan_ip()
 
@@ -333,6 +337,8 @@ class Broadcaster:
             camera_id,
         )
 
+        self._check_alerts(event)
+
         now = time.time()
 
         if event_type == "person_recognized":
@@ -453,6 +459,90 @@ class Broadcaster:
             return
 
         self.announce(event_type, text)
+
+    def _check_alerts(self, event: dict):
+
+        """Fire configured alert rules matching this event."""
+
+        if not ALERTS:
+
+            return
+
+        event_type = event.get("event_type")
+
+        camera_id = event.get("camera_id")
+
+        face_count = event.get("face_count") or 0
+
+        now = time.localtime()
+
+        for rule in ALERTS:
+
+            rule_id = rule.get("id")
+
+            if rule.get("camera") != camera_id:
+
+                continue
+
+            if rule.get("event") != event_type:
+
+                continue
+
+            if (
+                rule.get("min_faces", 2)
+                > face_count
+            ):
+                continue
+
+            if not time_in_slots(
+                now,
+                rule.get("time_slots"),
+            ):
+                continue
+
+            cooldown = rule.get(
+                "cooldown",
+                600,
+            )
+
+            last = self.last_alert_time.get(
+                rule_id,
+                0.0,
+            )
+
+            if (
+                time.time() - last
+                < cooldown
+            ):
+                continue
+
+            message = rule.get("message")
+
+            if not message:
+
+                logger.warning(
+                    "Alert rule %s has no message",
+                    rule_id,
+                )
+
+                continue
+
+            self.last_alert_time[rule_id] = (
+                time.time()
+            )
+
+            logger.info(
+                "Alert %s fired: %s (%d face(s))",
+                rule_id,
+                message,
+                face_count,
+            )
+
+            self.say(
+                message,
+                speakers=rule.get("speakers"),
+                local=rule.get("local", True),
+            )
 
     def _announce_unknown(self, event: dict):
 

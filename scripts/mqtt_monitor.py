@@ -16,6 +16,7 @@ RESET = "\033[0m"
 COLORS = {
     "person_recognized": GREEN,
     "unknown_person_detected": RED,
+    "multiple_faces_detected": YELLOW,
 }
 
 stats = {
@@ -52,6 +53,12 @@ def format_event(event):
 
     if event_type == "unknown_person_detected":
         person = "UNKNOWN"
+
+    if event_type == "multiple_faces_detected":
+        person = (
+            f"{event.get('face_count', '?')} "
+            f"face(s)"
+        )
 
     confidence = event.get(
         "confidence",

@@ -140,6 +140,94 @@ UNKNOWN_CONFIRM_DELAY = get_float(
     default=60.0,
 )
 
+# --- Alert rules ---
+#
+# Multi-face / time-slot alert rules. Each rule watches one camera for
+# a given event type with min_faces and fires the message to the given
+# speakers when the current time is inside one of the time_slots.
+#
+#   id:          unique rule id (used for cooldown bookkeeping)
+#   camera:      camera_id to watch (e.g. "front_door")
+#   event:       event_type that triggers the rule
+#               (e.g. "multiple_faces_detected")
+#   min_faces:   minimum face_count in the event payload
+#   time_slots:  list of {"start": "01:00", "end": "05:00"};
+#               overnight ranges (start > end) wrap past midnight
+#   speakers:    cast speaker friendly names to broadcast to
+#   local:       also play on the local (Pi) speaker
+#   cooldown:    seconds between alerts from the same rule
+#   message:     text spoken (through the same Polly/cast pipeline)
+
+ALERTS = get(
+    "alerts",
+    default=[],
+)
+
+
+def _slot_minutes(value: str) -> int:
+
+    """Parse "HH:MM" (24 h) into minutes since midnight."""
+
+    try:
+
+        hours, minutes = value.split(":")
+
+        return int(hours) * 60 + int(minutes)
+
+    except (ValueError, AttributeError):
+
+        raise ValueError(
+            f"Invalid time slot time: {value!r} "
+            "(expected \"HH:MM\")"
+        ) from None
+
+
+def time_in_slots(now, slots) -> bool:
+
+    """True if the current time falls in any time slot.
+
+    `now` is a time.struct_time / datetime with .tm_hour/.tm_min
+    (or .hour/.min). Overnight slots (start > end) wrap midnight.
+    """
+
+    if not slots:
+
+        return True
+
+    now_min = (
+        getattr(
+            now,
+            "tm_hour",
+            getattr(now, "hour", 0),
+        )
+        * 60
+        + getattr(
+            now,
+            "tm_min",
+            getattr(now, "min", 0),
+        )
+    )
+
+    for slot in slots:
+
+        start = _slot_minutes(slot["start"])
+
+        end = _slot_minutes(slot["end"])
+
+        if start <= end:
+
+            if start <= now_min < end:
+                return True
+
+        else:
+
+            # overnight: wraps past midnight
+            if now_min >= start or now_min < end:
+                return True
+
+    return False
+
+
 # --- Announcement templates ---
 
 TEMPLATES = get(

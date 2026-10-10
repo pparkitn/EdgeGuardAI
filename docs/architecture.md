@@ -157,6 +157,7 @@ Example topic for the default camera: `edgeguard/camera/front_entrance`. Consume
 
 - `person_recognized` — a known person (includes `person_id`)
 - `unknown_person_detected` — face present but below `RECOGNITION_THRESHOLD` (no `person_id`)
+- `multiple_faces_detected` — 2+ faces in a single frame (includes `face_count`; used by time-slot alert rules)
 
 ### How It Works
 

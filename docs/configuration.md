@@ -21,6 +21,7 @@ speakers:      # Google Home friendly names (the cast targets)
 voice:         # polly voice/region, http port, local playback,
                # interrupt playback, cooldown, announce policy
 announcements: # text templates + camera location labels
+alerts:        # targeted time-slot alerts (e.g. multiple faces at night)
 schedule:      # scheduled announcements (time/days/every + text)
 zigbee:        # device inventory (ieee -> location/type) for reference
 ```
@@ -31,7 +32,7 @@ zigbee:        # device inventory (ieee -> location/type) for reference
 |---|---|---|
 | `face_recognition` | `broker.*`, `cameras.usb.*`, `vision.*` | `EDGEGUARD_CAMERA_ID` |
 | `cameras` (Reolink) | `cameras.rtsp`, `vision.*` | `EDGEGUARD_CAMERA_PASSWORD` |
-| `voice` (broadcaster) | `speakers`, `voice.*`, `announcements.*`, `schedule` | `EDGEGUARD_SPEAKERS="a,b"` |
+| `voice` (broadcaster) | `speakers`, `voice.*`, `announcements.*`, `alerts`, `schedule` | `EDGEGUARD_SPEAKERS="a,b"` |
 
 **Override rules:**
 

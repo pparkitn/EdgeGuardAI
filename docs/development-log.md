@@ -158,3 +158,23 @@ Hands-on findings across the multi-machine system, cameras, and speakers.
 - Test added (`tests/test_broadcaster.py::test_unknown_not_announced_when_disabled`); 64 tests pass, ruff clean.
 - Deployed live: `PI_HOST=192.168.2.168 ./scripts/deploy_voice.sh` (rsync code), `announce_unknown: false` added under `voice:` in `/home/pi/edgeguard/config.yaml`, `sudo systemctl restart edgeguard-voice` → active; startup log clean (MQTT/Polly/pygame/HTTP all up).
 - Note: `voice/config.py` no longer carries the "(unknown-person events are always announced)" comment — unknown announcements are now policy-controllable like recognized ones.
+- Committed + pushed as `9abf72e` ("feat: configurable unknown-person announcements + remote control docs").
+
+**Remote control of a running OpenCode session from a phone**
+
+- Added `docs/remote-opencode-tailscale-ssh-tmux.md` (moved from repo root, linked in README docs table): run OpenCode inside a `tmux` session on the laptop, install Tailscale on laptop + phone, `ssh <user>@<tailscale-hostname>` then `tmux attach -t <project>` — the phone drives the SAME TUI session (no web server, no port forwarding, no second process). `tmux` keeps the agent running when SSH drops. Optional `oc()` shell helper creates/attaches a session named after the current directory. Security: keys + Tailscale only, keep all addresses/creds as placeholders in docs.
+
+---
+
+### Session Learnings (2026-10-10)
+
+**Time-slot alert rules (multi-face at night) + front-door camera**
+
+- User wanted: front-house camera, 2+ faces during early-morning hours, broadcast to specific devices (Pi local + Bedroom speaker, but configurable). Chose: FrontDoor Reolink at `192.168.2.32`, 01:00–05:00, min 2 faces, 10 min cooldown.
+- **Design**: per-identity events are throttled 10 s per name (2 unknown faces in one frame collapse to ONE `unknown_person_detected`), so "multiple people" can't be derived reliably from per-identity events. Instead the camera agent now publishes a frame-level **`multiple_faces_detected`** event with a `face_count` (`cameras/agent.py::_publish_multiple_faces`, throttled 10 s, added to both CPU and Jetson GPU pipelines since both share `CameraAgent`). `events.py::build_event` gained an optional `face_count` kwarg (backward compatible).
+- **Alert engine** lives on the Pi broadcaster: `voice/config.py` `ALERTS` (from `alerts:` in config, empty default) + `time_in_slots()` helper (HH:MM, `start > end` wraps midnight). `Broadcaster._check_alerts()` runs at the top of `handle_event` — matches camera/event/min_faces/time-slot/per-rule cooldown, then fires the targeted `say(message, speakers=..., local=...)` (same path as the scheduler). Per-rule `cooldown` (default 600 s) is independent of the generic `announcement_cooldown`.
+- 15 new tests (`tests/test_alerts.py` + 2 in `test_events.py`): slot parsing, overnight slots, rule firing/ignoring (camera/event/face_count/slot), cooldown, speaker/local passthrough. 79 total, ruff + compileall clean.
+- **Deploy (live)**:
+  - Jetson: camera creds differ from the shared Reolink password — the doorbell uses `admin` + its OWN password. Reolink locks ~5 min after bad RTSP attempts, so the first successful probe after ~10 bad attempts looked like continued 401s. `build_url` (`cameras/stream.py`) already supports a per-camera `password` (falls back to the shared `CAMERA_PASSWORD`), so the `front_door` entry carries `user: admin` + `password` directly in the Jetson's gitignored `config.yaml` (like the Bravia PSK). Deployed `cameras/*.py` + `events.py` (`deploy_cameras_gpu.sh` — the `pip install` step hangs on the Jetson but rsync completes first), restarted the service with the process-group kill + `set -a` setsid pattern. All 3 cameras opened (front_door 960x720 @ 2 fps, GPU inference ~40 ms).
+  - Pi: `deploy_voice.sh`, added the `alerts:` rule (`night_front_door`) to the Pi `config.yaml`, `sudo systemctl restart edgeguard-voice` → active; `from voice.config import ALERTS` confirms the rule loaded.
+- **Front-door D340W caveat**: the WiFi doorbell's RTSP **drops ~1/min and auto-reconnects** (watchdog/reconnect handles it; only `front_door` does this — the 2 wired Reolinks are stable). Likely weak WiFi on the doorbell. Model: Reolink Video Doorbell WiFi D340W (UID `9527000IKX0F18CT`, DB_566128M5MP_W).

@@ -67,6 +67,7 @@ The broadcaster is self-contained: it embeds the HTTP server that serves cached 
 | Event | Action |
 |---|---|
 | `unknown_person_detected` | announced: *"Security alert. An unknown person has been detected at the front entrance."* (can be disabled entirely with `voice:announce_unknown: false` in `config.yaml`) |
+| `multiple_faces_detected` | announced only when an `alerts:` rule matches (see below) |
 | `person_recognized` | logged only (`ANNOUNCE_RECOGNIZED = False` by default) |
 | Unknown event types | ignored |
 
@@ -79,6 +80,28 @@ The broadcaster is self-contained: it embeds the HTTP server that serves cached 
   - Speaker offline → other speakers still get the audio
   - MQTT down → broadcaster reconnects (1–30 s backoff)
 - Logs to console + `logs/broadcaster.log` (or journald under systemd).
+
+### Alert rules (`alerts`)
+
+Alert rules fire a **targeted announcement** when a camera emits a matching event during specific time slots — e.g. *"multiple people at the front door overnight"*. The camera pipeline publishes `multiple_faces_detected` (with a `face_count`) whenever 2+ faces appear in one frame; rules decide whether to speak, when, and to whom.
+
+```yaml
+alerts:
+  - id: night_front_door
+    camera: front_door
+    event: multiple_faces_detected
+    min_faces: 2
+    time_slots:
+      - {start: "01:00", end: "05:00"}   # start > end wraps midnight
+    speakers: ["Bedroom  speaker"]        # absent = ALL cast speakers
+    local: true                           # also play on the Pi speaker
+    cooldown: 600                         # seconds between alerts (default 600)
+    message: "Multiple people detected at the front door."
+```
+
+- Empty by default — no alerts fire until configured.
+- Rules are evaluated per event, **in addition to** the normal announcement flow; each rule keeps its own cooldown (`cooldown`, default 600 s) independent of the generic `announcement_cooldown`.
+- The alert uses the same targeted `say()` path as the scheduler, so `speakers`/`local` control exactly which devices hear it.
 
 ### Components (`voice/`)
 
@@ -127,7 +150,9 @@ schedule:
 | `POLLY_VOICE` | `Brian` | Neural voice |
 | `POLLY_REGION` | `us-east-1` | AWS region |
 | `ANNOUNCE_RECOGNIZED` | `False` | Also announce known-person events |
+| `ANNOUNCE_UNKNOWN` | `True` | Announce unknown-person events (set `false` to silence) |
 | `ANNOUNCEMENT_COOLDOWN` | `60.0` | Seconds between same-type announcements |
+| `ALERTS` | `[]` | Time-slot alert rules (camera/event/min_faces/speakers/cooldown) |
 | `HTTP_PORT` | `8000` | Audio server port (speakers pull from here) |
 | `TEMPLATES` / `CAMERA_LOCATIONS` | — | Announcement text + camera → location labels |
 
