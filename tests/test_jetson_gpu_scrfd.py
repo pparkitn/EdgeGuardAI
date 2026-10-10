@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 
+pytest.importorskip("cv2")
+
 from jetson_gpu.scrfd import (
     SCRFD,
     distance2bbox,

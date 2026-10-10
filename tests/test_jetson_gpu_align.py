@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 
+pytest.importorskip("cv2")
+
 from jetson_gpu.align import ARCFACE_DST, estimate_norm, norm_crop
 
 

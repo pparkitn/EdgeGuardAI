@@ -1,8 +1,6 @@
 import logging
 import time
 
-import pychromecast
-
 from .config import INTERRUPT_PLAYBACK, SPEAKERS
 
 logger = logging.getLogger(__name__)
@@ -28,6 +26,8 @@ class SpeakerManager:
             return self.casts
 
         try:
+
+            import pychromecast
 
             chromecasts, browser = (
                 pychromecast.get_listed_chromecasts(

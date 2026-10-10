@@ -1,11 +1,5 @@
 import logging
 
-import boto3
-from botocore.exceptions import (
-    BotoCoreError,
-    ClientError,
-)
-
 from .audio_cache import AudioCache
 from .config import POLLY_REGION, POLLY_VOICE
 
@@ -24,6 +18,8 @@ class PollyClient:
         self.cache = AudioCache()
 
         try:
+
+            import boto3
 
             self.client = boto3.client(
                 "polly",
@@ -55,6 +51,11 @@ class PollyClient:
             return self.cache.path_for(text)
 
         try:
+
+            from botocore.exceptions import (
+                BotoCoreError,
+                ClientError,
+            )
 
             response = self.client.synthesize_speech(
                 Text=text,

@@ -4,6 +4,8 @@ insightface (CI) - must degrade gracefully, never raise on import."""
 import numpy as np
 import pytest
 
+pytest.importorskip("cv2")
+
 from jetson_gpu.detector import GpuFaceDetector
 
 

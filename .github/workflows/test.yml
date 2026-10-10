@@ -32,7 +32,7 @@ jobs:
 
       - name: Compile checks (compileall)
         run: python -m compileall -q \
-          events.py edgeguard_config.py enroll.py \
+          events.py edgeguard_config.py enroll.py doorbell.py bravia.py \
           face_recognition cameras voice scripts tests
 
       - name: Tests (pytest)
