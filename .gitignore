@@ -25,6 +25,7 @@ logs/*
 *.db
 data/audio/*
 !data/audio/.gitkeep
+data/garage_door_*.jpg
 
 # IDE
 .vscode/

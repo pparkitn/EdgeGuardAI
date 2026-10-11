@@ -132,6 +132,23 @@ doorbell:
   user: admin
   password: ""
 
+# --- garage door open/closed detection ---------------------------
+# Compares two door ROIs against a stored "closed" reference frame
+# from the garage camera (fixed camera -> stable panels). ROIs are
+# frame fractions (x, y, w, h). Tune with: python -m garage_doors
+# calibrate (saves an annotated still), then reference, then check.
+garage_doors:
+  camera_id: garage
+  reference: data/garage_door_reference.jpg
+  interval: 15
+  threshold: 25.0
+  close_threshold: 12.0
+  refresh_reference: true
+  refresh_cycles: 40
+  rois:
+    left:  {x: 0.05, y: 0.12, w: 0.42, h: 0.78}
+    right: {x: 0.53, y: 0.12, w: 0.42, h: 0.78}
+
 # --- Kasa smart plugs (MQTT-controlled, python-kasa) --------------
 kasa:
   plugs:

@@ -22,6 +22,7 @@ voice:         # polly voice/region, http port, local playback,
                # interrupt playback, cooldown, announce policy
 bravia:        # Sony TV REST control (host/port/psk)
 doorbell:      # Reolink doorbell siren (host/port/user/password)
+garage_doors:  # garage door open/closed detector (ROIs, thresholds)
 announcements: # text templates + camera location labels
 alerts:        # targeted time-slot alerts (e.g. multiple faces at night)
 schedule:      # scheduled announcements (time/days/every + text)
@@ -35,6 +36,7 @@ zigbee:        # device inventory (ieee -> location/type) for reference
 | `face_recognition` | `broker.*`, `cameras.usb.*`, `vision.*` | `EDGEGUARD_CAMERA_ID` |
 | `cameras` (Reolink) | `cameras.rtsp`, `vision.*` | `EDGEGUARD_CAMERA_PASSWORD` |
 | `doorbell` (siren) | `doorbell` | `EDGEGUARD_DOORBELL_PASSWORD` |
+| `garage_doors` (state) | `garage_doors` | — |
 | `voice` (broadcaster) | `speakers`, `voice.*`, `announcements.*`, `alerts`, `schedule` | `EDGEGUARD_SPEAKERS="a,b"` |
 
 **Override rules:**
