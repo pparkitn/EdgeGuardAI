@@ -3,6 +3,7 @@ import pytest
 
 from garage_doors import (
     _gray_mad,
+    decide_states,
     hysteresis,
     roi_mads,
     should_refresh_reference,
@@ -102,6 +103,134 @@ def test_no_refresh_while_door_open():
     )
 
 
+def test_open_needs_confirm_cycles():
+
+    counts = {}
+    mads = {"left": 40.0}
+
+    first = decide_states(
+        {"left": "closed"},
+        mads,
+        counts,
+        confirm_cycles=2,
+    )
+
+    assert first["left"] == "closed"
+
+    second = decide_states(
+        first,
+        mads,
+        counts,
+        confirm_cycles=2,
+    )
+
+    assert second["left"] == "open"
+
+
+def test_open_no_confirm_when_cycles_1():
+
+    counts = {}
+
+    states = decide_states(
+        {"left": "closed"},
+        {"left": 40.0},
+        counts,
+        confirm_cycles=1,
+    )
+
+    assert states["left"] == "open"
+
+
+def test_transient_spike_never_announces_open():
+
+    counts = {}
+    previous = {"left": "closed"}
+
+    for mad in (28.0, 8.0, 5.0):
+
+        previous = decide_states(
+            previous,
+            {"left": mad},
+            counts,
+            confirm_cycles=2,
+        )
+
+    assert previous["left"] == "closed"
+
+
+def test_dead_zone_stays_open_then_heals():
+
+    counts = {}
+    previous = {"left": "open"}
+
+    for _ in range(5):
+
+        previous = decide_states(
+            previous,
+            {"left": 16.0},
+            counts,
+            close_threshold=12.0,
+            stuck_open_cycles=6,
+        )
+
+        assert previous["left"] == "open"
+
+    healed = decide_states(
+        previous,
+        {"left": 16.0},
+        counts,
+        close_threshold=12.0,
+        stuck_open_cycles=6,
+    )
+
+    assert healed["left"] == "closed"
+
+
+def test_closed_below_close_threshold_immediately():
+
+    counts = {}
+
+    states = decide_states(
+        {"left": "open"},
+        {"left": 5.0},
+        counts,
+        close_threshold=12.0,
+        stuck_open_cycles=6,
+    )
+
+    assert states["left"] == "closed"
+
+
+def test_confirm_counter_resets_on_subthreshold():
+
+    counts = {}
+
+    decide_states(
+        {"left": "closed"},
+        {"left": 40.0},
+        counts,
+        confirm_cycles=2,
+    )
+
+    decide_states(
+        {"left": "closed"},
+        {"left": 10.0},
+        counts,
+        confirm_cycles=2,
+    )
+
+    states = decide_states(
+        {"left": "closed"},
+        {"left": 40.0},
+        counts,
+        confirm_cycles=2,
+    )
+
+    assert states["left"] == "closed"
+
+    assert counts["confirm"]["left"] == 1
+
+
 def test_refresh_after_quiet_cycles():
 
     assert should_refresh_reference(
@@ -155,6 +284,40 @@ def test_roi_mads_synthetic_frames():
     assert mads["left"] > 25.0
 
     assert mads["right"] < 1.0
+
+
+def test_roi_mads_lighting_shift_normalized():
+
+    pytest.importorskip("cv2")
+
+    import numpy as np
+
+    reference = np.full((480, 640, 3), 100, dtype=np.uint8)
+
+    frame = np.full((480, 640, 3), 160, dtype=np.uint8)
+
+    rois = {
+        "left": {"x": 0.0, "y": 0.0, "w": 0.5, "h": 1.0},
+        "right": {"x": 0.5, "y": 0.0, "w": 0.5, "h": 1.0},
+    }
+
+    mads_aligned = roi_mads(
+        frame,
+        reference,
+        rois,
+        normalize_lighting=True,
+    )
+
+    assert mads_aligned["left"] < 2.0
+
+    mads_raw = roi_mads(
+        frame,
+        reference,
+        rois,
+        normalize_lighting=False,
+    )
+
+    assert mads_raw["left"] > 50.0
 
 
 def test_classify_opens_only_changed_door():

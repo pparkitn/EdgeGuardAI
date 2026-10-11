@@ -13,8 +13,15 @@ Config: config.yaml -> garage_doors:
   camera_id: garage            # which cameras.rtsp entry to read
   reference: data/garage_door_reference.jpg
   interval: 15                 # monitor loop seconds
-  threshold: 25.0              # MAD -> open
+  threshold: 25.0              # MAD -> open (needs confirm_cycles in a row)
   close_threshold: 12.0        # MAD below this -> closed (hysteresis)
+  confirm_cycles: 2            # consecutive >threshold cycles before "open"
+  stuck_open_cycles: 6         # "open" but MAD < threshold for this many
+                               #   cycles -> lighting drift, fall back closed
+  refresh_reference: true      # re-baseline while both doors stay closed
+  refresh_cycles: 40           # cycles of quiet before refreshing
+  refresh_max_mad: 50.0        # adoption bar vs current reference
+  normalize_lighting: true     # align per-ROI brightness (IR-cut/gain swings)
   rois:                        # door ROIs as frame fractions (x,y,w,h)
     left:  {x: 0.05, y: 0.12, w: 0.42, h: 0.78}
     right: {x: 0.53, y: 0.12, w: 0.42, h: 0.78}
@@ -78,6 +85,25 @@ CLOSE_THRESHOLD = get_float(
     default=12.0,
 )
 
+# Require this many consecutive cycles above 'threshold' before a
+# door is announced 'open' (filters one-cycle transients: shadows,
+# headlights, exposure jumps).
+CONFIRM_CYCLES = get_int(
+    "garage_doors",
+    "confirm_cycles",
+    default=2,
+)
+
+# If a door is 'open' but its MAD stays BELOW 'threshold' for this
+# many consecutive cycles, the measurement no longer supports the
+# state -- treat it as lighting drift and fall back to 'closed'
+# (the dead zone between close_threshold and threshold heals).
+STUCK_OPEN_CYCLES = get_int(
+    "garage_doors",
+    "stuck_open_cycles",
+    default=6,
+)
+
 # While both doors stay closed, refresh the reference frame every
 # this many monitor cycles so day/night lighting drift doesn't
 # push the "closed" MAD floor up toward the open threshold.
@@ -87,10 +113,31 @@ REFRESH_REFERENCE = get_bool(
     default=True,
 )
 
+# Normalize per-ROI brightness before the MAD comparison (align the
+# current ROI's mean to the reference's). Kills uniform brightness
+# swings -- IR cut-filter switching at dusk, auto-gain ramping --
+# that otherwise push closed-door MAD up to/over the threshold.
+NORMALIZE_LIGHTING = get_bool(
+    "garage_doors",
+    "normalize_lighting",
+    default=True,
+)
+
 REFRESH_CYCLES = get_int(
     "garage_doors",
     "refresh_cycles",
     default=40,
+)
+
+# Adoption bar for a refreshed reference frame: per-ROI MAD of the
+# candidate vs the CURRENT reference must stay below this, else the
+# frame is rejected (door may actually be open, object in ROI...).
+# Measured separation: closed-with-drift up to ~46, open >= 55 --
+# so 50 sits between the classes.
+REFRESH_MAX_MAD = get_float(
+    "garage_doors",
+    "refresh_max_mad",
+    default=50.0,
 )
 
 ROIS = get(
@@ -321,14 +368,20 @@ def roi_mads(
     frame,
     reference,
     rois=None,
+    normalize_lighting=NORMALIZE_LIGHTING,
 ) -> dict:
 
     """Per-door mean absolute difference vs the reference frame.
 
     Both inputs are full-frame BGR arrays; ROIs are applied inside.
+    With normalize_lighting (default), each current ROI's mean is
+    aligned to its reference ROI's mean first, so uniform brightness
+    swings (IR-cut switch at dusk, auto-gain ramping) don't count
+    as "open" -- only structural change does.
     """
 
     import cv2
+    import numpy as np
 
     ref = cv2.cvtColor(
         cv2.resize(
@@ -352,13 +405,33 @@ def roi_mads(
 
     cur = cv2.GaussianBlur(cur, blur_kernel, 0)
 
-    return {
-        name: _gray_mad(
-            _roi_slice(ref, roi),
-            _roi_slice(cur, roi),
-        )
-        for name, roi in (rois or ROIS).items()
-    }
+    result = {}
+
+    for name, roi in (rois or ROIS).items():
+
+        ref_roi = _roi_slice(ref, roi)
+
+        cur_roi = _roi_slice(cur, roi)
+
+        if normalize_lighting:
+
+            mean_ref = float(ref_roi.mean())
+
+            mean_cur = float(cur_roi.mean())
+
+            shift = mean_ref - mean_cur
+
+            if abs(shift) > 0.5:
+
+                cur_roi = np.clip(
+                    cur_roi.astype(np.float32) + shift,
+                    0,
+                    255,
+                )
+
+        result[name] = _gray_mad(ref_roi, cur_roi)
+
+    return result
 
 
 def classify(
@@ -424,6 +497,78 @@ def hysteresis(
     return result
 
 
+def decide_states(
+    previous,
+    mads,
+    counts,
+    threshold=THRESHOLD,
+    close_threshold=CLOSE_THRESHOLD,
+    confirm_cycles=CONFIRM_CYCLES,
+    stuck_open_cycles=STUCK_OPEN_CYCLES,
+):
+
+    """Per-door state transition with transient suppression.
+
+    'counts' is a mutable dict of per-door counters (consecutive
+    above-threshold cycles); it is updated in place so the monitor
+    loop can persist them between cycles.
+
+    open requires confirm_cycles consecutive cycles above threshold
+    (one-cycle spikes -- shadows, headlights -- never announce);
+    a reported-open door whose MAD stays below threshold for
+    stuck_open_cycles falls back to 'closed' (drift healing).
+    """
+
+    counts.setdefault("confirm", {})
+    counts.setdefault("stuck", {})
+
+    result = {}
+
+    for name, mad in mads.items():
+
+        last = (previous or {}).get(name, "closed")
+
+        confirm = counts["confirm"]
+        stuck = counts["stuck"]
+
+        if mad > threshold:
+
+            confirm[name] = confirm.get(name, 0) + 1
+            stuck[name] = 0
+            result[name] = (
+                "open"
+                if confirm[name] >= confirm_cycles
+                else last
+            )
+
+        else:
+
+            confirm[name] = 0
+
+            if last == "open":
+
+                if mad < close_threshold:
+
+                    stuck[name] = 0
+                    result[name] = "closed"
+
+                else:
+
+                    stuck[name] = stuck.get(name, 0) + 1
+                    result[name] = (
+                        "closed"
+                        if stuck[name] >= stuck_open_cycles
+                        else "open"
+                    )
+
+            else:
+
+                stuck[name] = 0
+                result[name] = "closed"
+
+    return result
+
+
 def load_reference(path=REFERENCE_PATH):
 
     import os
@@ -442,13 +587,35 @@ def load_reference(path=REFERENCE_PATH):
 
 def save_reference(path=REFERENCE_PATH, timeout=20) -> bool:
 
-    """Capture the current camera view as the closed-door reference."""
+    """Capture the current camera view as the closed-door reference.
 
-    if capture_still(path, timeout=timeout):
+    Writes to a temp file and atomically replaces the target, so a
+    failed capture can never masquerade as a fresh reference (a
+    stale JPEG would pass capture_still's existence check).
+    """
 
-        print(f"Reference saved: {path}")
+    import os
+    import tempfile
 
-        return True
+    fd, tmp = tempfile.mkstemp(suffix=".jpg")
+
+    os.close(fd)
+
+    try:
+
+        if capture_still(tmp, timeout=timeout):
+
+            os.replace(tmp, path)
+
+            print(f"Reference saved: {path}")
+
+            return True
+
+    finally:
+
+        if os.path.exists(tmp):
+
+            os.remove(tmp)
 
     print(
         "Reference capture FAILED "
@@ -544,6 +711,8 @@ def monitor_loop(
 
     previous = None
 
+    counts = {}
+
     consecutive_closed = 0
 
     logger.info(
@@ -585,15 +754,18 @@ def monitor_loop(
 
             mads = roi_mads(frame, reference)
 
-            states = hysteresis(
-                None,
+            states = decide_states(
                 previous,
                 mads,
+                counts,
             )
 
             if all(
                 state == "closed"
                 for state in states.values()
+            ) and all(
+                mad <= THRESHOLD
+                for mad in mads.values()
             ):
 
                 consecutive_closed += 1
@@ -603,7 +775,7 @@ def monitor_loop(
                     consecutive_closed,
                 ):
 
-                    tmp_ref, fd2 = tempfile.mkstemp(
+                    fd2, tmp_ref = tempfile.mkstemp(
                         suffix=".jpg"
                     )
 
@@ -613,18 +785,78 @@ def monitor_loop(
 
                         if capture_still(tmp_ref):
 
-                            reference = cv2.imread(tmp_ref)
+                            candidate = cv2.imread(tmp_ref)
 
-                            cv2.imwrite(path, reference)
+                            if candidate is None:
 
-                            consecutive_closed = 0
+                                logger.warning(
+                                    "Reference refresh: "
+                                    "candidate unreadable, "
+                                    "skipping"
+                                )
 
-                            logger.info(
-                                "Garage door reference "
-                                "refreshed (both closed)"
-                            )
+                            else:
 
-                            continue
+                                # Adopt only if the new frame
+                                # still resembles the CURRENT
+                                # reference (prevents absorbing
+                                # an actually-open door or an
+                                # object in the ROI; generous bar
+                                # so daylight drift still passes).
+                                cand_mads = roi_mads(
+                                    candidate,
+                                    reference,
+                                )
+
+                                if all(
+                                    cm <= REFRESH_MAX_MAD
+                                    for cm in cand_mads.values()
+                                ):
+
+                                    reference = candidate
+
+                                    fd3, tmp_out = \
+                                        tempfile.mkstemp(
+                                            suffix=".jpg",
+                                        )
+
+                                    os.close(fd3)
+
+                                    cv2.imwrite(
+                                        tmp_out,
+                                        reference,
+                                    )
+
+                                    os.replace(
+                                        tmp_out,
+                                        path,
+                                    )
+
+                                    consecutive_closed = 0
+
+                                    logger.info(
+                                        "Garage door reference "
+                                        "refreshed (both closed, "
+                                        "cand mads=%s)",
+                                        {
+                                            k: round(v, 1)
+                                            for k, v in
+                                            cand_mads.items()
+                                        },
+                                    )
+
+                                    continue
+
+                                logger.info(
+                                    "Reference refresh "
+                                    "REJECTED: candidate "
+                                    "not closed (mads=%s)",
+                                    {
+                                        k: round(v, 1)
+                                        for k, v in
+                                        cand_mads.items()
+                                    },
+                                )
 
                     finally:
 

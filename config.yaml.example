@@ -143,8 +143,12 @@ garage_doors:
   interval: 15
   threshold: 25.0
   close_threshold: 12.0
+  confirm_cycles: 2          # consecutive >threshold cycles before "open" (transients never announce)
+  stuck_open_cycles: 6       # "open" but MAD < threshold for that many cycles -> drift, fall back to closed
   refresh_reference: true
   refresh_cycles: 40
+  refresh_max_mad: 50.0      # adoption bar vs current reference (blocks absorbing an open door)
+  normalize_lighting: true   # align per-ROI brightness vs reference (dusk IR-cut / gain swings)
   rois:
     left:  {x: 0.05, y: 0.12, w: 0.42, h: 0.78}
     right: {x: 0.53, y: 0.12, w: 0.42, h: 0.78}
