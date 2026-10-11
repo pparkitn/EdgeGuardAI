@@ -240,3 +240,12 @@ Hands-on findings across the multi-machine system, cameras, and speakers.
 - Refresh adoption guard: candidate frame must measure ≤ `refresh_max_mad` (default 50) vs the current reference per ROI — blocks absorbing an actually-open door (measured open ≥ 55) while passing drift (≤ ~46).
 - Ops gotchas hit live: `pgrep -f 'garage_doors monitor'` matches the ssh wrapper itself (kill it and you kill your own session — use `pgrep -f 'garage_doors [m]onitor'`); the monitor launched via `setsid` must be killed by its own pid-group (`kill -9 -<pid>`), not the wrapper's; `check`/`reference`/`calibrate` on the Jetson need `set -a && . ./cameras.env && set +a` (camera creds live in the env, not the Jetson's config.yaml).
 - Deployed to the Jetson (md5-verified), monitor restarted, retained `edgeguard/garage/doors` = `{"left":"closed","right":"closed"}` at 19:02. Door opens now need 2 cycles (~30 s) before announcing — brief pop-open-close may not announce (acceptable trade for no false alarms).
+
+**Garage door detection DISABLED (2026-10-11 evening, user request)**
+
+- User: "turn off the garage open/close detection, its not working" — they don't trust it (despite the fixes above, and short opens now being unannounceable by design).
+- Actions taken:
+  - Jetson: `garage_doors monitor` killed via its own pid-group (`kill -9 -6104`); confirmed `pgrep -f 'garage_doors [m]onitor'` → nothing. No longer publishing to `edgeguard/garage/doors`.
+  - Pi: `/home/pi/edgeguard/config.yaml` → `garage_doors_announce: enabled: false` (sed in place) + `sudo systemctl restart edgeguard-voice` → active. No further announcements regardless of the topic.
+- The retained `edgeguard/garage/doors` topic still holds `{"left":"closed","right":"closed"}` from before shutdown — inert, nothing subscribes/acts on it now. Any new Jetson reboot will NOT restart the monitor (it was a detached setsid process, no systemd unit).
+- Code/config/docs all remain in the repo (`garage_doors.py`, `config.yaml.example` `garage_doors:` + `garage_doors_announce:`) — fully revertible by re-running `python -m garage_doors monitor` on the Jetson (with `set -a` + cameras.env) and flipping `enabled: true` on the Pi + restart. No repo changes made for the disable.
