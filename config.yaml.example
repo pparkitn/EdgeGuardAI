@@ -153,9 +153,11 @@ garage_doors:
 # Speaks left/right garage door open/closed changes (subscribed from
 # the Jetson monitor's edgeguard/garage/doors topic). First message
 # (usually the retained one after restart) is just a baseline.
+# speakers: [] (default) = ONLY the Pi's local speaker - no Google
+# devices; list names here to also cast (e.g. ["Kitchen speaker"]).
 garage_doors_announce:
   enabled: true
-  speakers: []              # empty = all cast speakers
+  speakers: []
   local: true
   cooldown: 30.0
   templates:

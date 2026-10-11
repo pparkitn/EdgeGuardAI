@@ -145,7 +145,9 @@ UNKNOWN_CONFIRM_DELAY = get_float(
 # The Jetson garage_doors.py monitor publishes state changes to
 # broker.topic_prefix + "/garage/doors" (retained JSON
 # {"left": "open|closed", "right": "open|closed"}). If enabled, the
-# broadcaster speaks the changes to the configured speakers.
+# broadcaster speaks the changes. speakers: [] (default) = ONLY the
+# Pi's local speaker, no Google devices; name speakers to cast to
+# them (None/absent would mean all cast speakers, like the scheduler).
 
 GARAGE_DOORS_TOPIC = (
     get(

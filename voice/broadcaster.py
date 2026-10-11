@@ -424,10 +424,7 @@ class Broadcaster:
 
         self.say(
             text,
-            speakers=(
-                GARAGE_DOORS_SPEAKERS
-                or None
-            ),
+            speakers=GARAGE_DOORS_SPEAKERS,
             local=GARAGE_DOORS_LOCAL,
         )
 

@@ -111,7 +111,8 @@ The Jetson `garage_doors.py` monitor publishes state changes to `edgeguard/garag
 ```yaml
 garage_doors_announce:
   enabled: true
-  speakers: []              # empty = all cast speakers
+  speakers: []              # [] = ONLY the Pi's local speaker (no Google devices);
+                            # list names to also cast (e.g. ["Kitchen speaker"])
   local: true
   cooldown: 30.0            # seconds between garage-door announcements
   templates:

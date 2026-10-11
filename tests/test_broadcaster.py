@@ -278,6 +278,46 @@ def test_garage_doors_announces_open_change():
     assert "open" in text
 
 
+def test_garage_doors_local_only_by_default():
+
+    original = broadcaster.GARAGE_DOORS_SPEAKERS
+
+    broadcaster.GARAGE_DOORS_SPEAKERS = []
+
+    try:
+
+        bc = make_broadcaster()
+
+        bc.last_garage_state = {
+            "left": "closed",
+            "right": "closed",
+        }
+
+        bc._on_message(
+            None,
+            None,
+            garage_msg(
+                {"left": "open", "right": "closed"}
+            ),
+        )
+
+        bc.say.assert_called_once()
+
+        assert (
+            bc.say.call_args.kwargs["speakers"]
+            == []
+        )
+
+        assert (
+            bc.say.call_args.kwargs["local"]
+            is True
+        )
+
+    finally:
+
+        broadcaster.GARAGE_DOORS_SPEAKERS = original
+
+
 def test_garage_doors_announces_both_changes():
 
     bc = make_broadcaster()
