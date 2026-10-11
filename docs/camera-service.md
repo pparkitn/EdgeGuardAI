@@ -25,7 +25,19 @@ Reolink camera (RTSP) ──► ffmpeg (static binary, scaled to 960x720 @ 2 fps
 
 - Streams are decoded with a **static ffmpeg binary** (`imageio-ffmpeg`) — chosen over PyAV because ffmpeg handles the RTSP auth handshake (special characters in passwords) correctly and provides scaling + frame capping for free.
 - Reconnection: if the stream dies, the agent waits `EDGEGUARD_RECONNECT_DELAY` (3 s) and reopens.
+- **Stream watchdog** (`vision.stream_timeout`, default 15 s): a session can hang silently mid-frame (TCP ESTABLISHED, no data) — the watchdog reads incrementally on a non-blocking pipe with a whole-frame deadline and reconnects hung sessions.
+- **Per-camera credentials**: each camera entry can carry its own `user`/`password` (e.g. the D340W doorbell uses `admin` + its own password — not the shared one). Falls back to the shared `CAMERA_PASSWORD`.
 - The Pi broadcaster picks up the camera's events automatically (`edgeguard/#`), so unknown people at any camera trigger the same announcements — add the camera id to `CAMERA_LOCATIONS` in `voice/config.py` for a nice location label.
+
+### Live cameras
+
+| camera_id | Camera | Path | Notes |
+|---|---|---|---|
+| `back_yard` | Reolink RLC-510A (.183) | `/Preview_01_main` | wired, stable |
+| `garage` | Reolink RLC-410W (.184) | `/h264Preview_01_main` | wired, stable; also feeds the garage-door monitor |
+| `front_door` | Reolink D340W doorbell (.32) | `/h264Preview_01_main` | WiFi — RTSP drops ~1/min, auto-reconnects; 960×720 |
+
+When 2+ faces are in one frame, the agent additionally publishes `multiple_faces_detected` (with `face_count`) — the event that feeds time-slot `alerts:` rules.
 
 ### Finding the stream URL (Reolink)
 
@@ -59,6 +71,13 @@ CAMERAS = [
         "path": "/Preview_01_main",  # use the SUB stream for face detection
         "transport": "tcp",          # tcp (default) or udp
     },
+    {
+        "id": "front_door",          # per-camera credentials: doorbell uses
+        "host": "192.168.2.32",      # admin + its OWN password (not shared)
+        "user": "admin",
+        "password": "…",             # overrides the shared CAMERA_PASSWORD
+        "path": "/h264Preview_01_main",
+    },
 ]
 ```
 
@@ -76,10 +95,13 @@ CAMERAS = [
 ### Running
 
 ```bash
-EDGEGUARD_CAMERA_PASSWORD='...' .venv/bin/python -m cameras.main
+EDGEGUARD_CAMERA_PASSWORD='...' .venv/bin/python -m cameras.main   # CPU pipeline (any machine)
+python3 -m jetson_gpu.main                                         # GPU pipeline (Jetson, TRT)
 ```
 
-Verified live: RLC-510A stream opened (2560×1920 native, scaled 960×720 @ 2 fps), 15 frames read cleanly, no errors; events/snapshots flow through the exact same pipeline as the USB camera when faces appear.
+On the Jetson the service runs the **TensorRT GPU variant** (`jetson_gpu.main`, system Python 3.6, detached via `setsid` + `set -a` + `cameras.env`; systemd unit `edgeguard-cameras-gpu` ready but not installed — needs sudo). Verify: `pgrep -f jetson_gpu.main`, `grep -c "GPU inference" /tmp/jetson_cameras_gpu.log`, `tegrastats | grep GR3D_FREQ`.
+
+Verified live: all 3 cameras open (back_yard 960×720, garage 1280×720, front_door 960×720 @ 2 fps, GPU inference ~40 ms); events/snapshots flow through the exact same pipeline as the USB camera when faces appear.
 
 ---
 

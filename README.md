@@ -28,13 +28,19 @@ Camera detects & recognizes a person  →  MQTT event  →  Security decision  �
 ## 🔭 What It Does
 
 | Capability | Detail |
-|---|---|
+|---|---|---|
 | 🎥 **USB camera pipeline** | real-time face detection + recognition with a live GUI (dev machine) |
-| 📷 **IP camera service** | headless Reolink RTSP monitoring — currently 2 cameras (yard, garage) |
+| 📷 **IP camera service** | headless Reolink RTSP monitoring — 3 cameras (yard, garage, front-door D340W doorbell) |
 | 🧠 **Face recognition** | insightface `buffalo_l` embeddings, cosine matching, 12 enrolled people |
 | 📡 **MQTT event bus** | Jetson Mosquitto broker; `edgeguard/camera/<id>` topics, JSON events |
 | 🔔 **Voice broadcaster** | AWS Polly TTS → Pi local speaker + Google Cast (4 speakers) |
-| 🕐 **Scheduler** | 15 ported family announcements (school, dishwasher…) with per-speaker targeting |
+| 🕐 **Scheduler** | family announcements with per-speaker targeting + device actions (`tv_off` via Bravia REST) |
+| ⏰ **Alert rules** | time-slot rules (e.g. multiple faces at the front door at night) → targeted announcements + optional doorbell siren |
+| 🚪 **Doorbell siren** | Reolink D340W built-in alarm over HTTP CGI (`doorbell.py`, `scripts/siren.py`) |
+| 🚗 **Garage door detection** | garage camera ROI analysis → retained `edgeguard/garage/doors` state → spoken announcements on the Pi |
+| 🔌 **Kasa plug control** | TP-Link KP400/KP401 over MQTT (`edgeguard-kasa` service, `scripts/plug.py`) |
+| 📺 **TV control** | Sony Bravia REST IP control (`bravia.py`: power, input, apps) |
+| 💬 **Ad-hoc voice** | `scripts/say.py "text"` → `edgeguard/command/say` → Polly/cast pipeline |
 | 🚪 **Zigbee sensors** | 4 door contacts + smart plug via Zigbee2MQTT (bridge pending) |
 | 🛡️ **Privacy by design** | face images/embeddings never leave the LAN or the repo |
 
@@ -50,8 +56,10 @@ Camera detects & recognizes a person  →  MQTT event  →  Security decision  �
                     ┌──────────────────────────────────────┐
                     │  JETSON XAVIER NX                    │
                     │   MQTT broker (event bus)             │
-                    │   Reolink camera service              │
-                    │   (yard + garage → detect → recognize)│
+                    │   Reolink camera service (GPU)        │
+                    │   (yard + garage + front door →       │
+                    │    detect → recognize)                │
+                    │   garage door monitor (retained state)│
                     └──────────────┬───────────────────────┘
                                    │  MQTT (1883)
                                    ▼
@@ -59,6 +67,7 @@ Camera detects & recognizes a person  →  MQTT event  →  Security decision  �
                     │  RASPBERRY PI                        │
                     │   Voice broadcaster (systemd)         │
                     │   AWS Polly → Pi speaker + Google Cast│
+                    │   Kasa plug controller (MQTT)         │
                     │   Zigbee2MQTT + own broker (Docker)  │
                     └──────────────────────────────────────┘
 ```
@@ -132,8 +141,8 @@ Measured on the **NVIDIA Jetson Xavier NX** (JetPack 4.4) against live camera st
 | Metric | Value |
 |---|---|
 | Hardware | Jetson Xavier NX, CPU-only baseline (onnxruntime) — see the [Jetson GPU section](#-jetson-gpu-acceleration-jetson_gpu) below |
-| Camera streams | 2 × 1080p-class (back yard + garage, processed 960×720 @ 2 FPS) |
-| Face database | 12 people / 42 embeddings |
+| Camera streams | 3 × IP cameras (back yard, garage, front-door doorbell; processed 960×720 / 1280×720 @ 2 FPS) |
+| Face database | 12 people / 50 embeddings |
 | **Detection latency** (insightface `buffalo_l`, det_size 640) | **439 ms avg / 448 ms p95** |
 | **Recognition latency** (cosine, brute-force over DB) | **2.7 ms avg / 3.4 ms p95** |
 | **Throughput** (full frame pipeline, single thread) | **2.29 FPS** (437 ms/frame) |
@@ -191,7 +200,7 @@ Notes for JetPack 4.4: `pycuda` builds with `--no-build-isolation` + `CFLAGS=-I/
 
 ## 🧩 Status
 
-- ✅ Face recognition (USB + 2 Reolink cameras) · MQTT event bus · voice broadcast (4 speakers + Pi) · scheduler (15 announcements) · false-alarm grace · central config · systemd deployment · **TensorRT GPU camera service running live on the Jetson** (`jetson_gpu`, CPU fallback intact)
-- 🔜 Zigbee → event-bus bridging/correlation · security decision engine · armed/disarmed state · dashboard · sub-stream decoding (ffmpeg CPU is now the bottleneck) · GPU service under systemd
+- ✅ Face recognition (USB + 3 Reolink cameras incl. front-door D340W doorbell) · MQTT event bus · voice broadcast (4 speakers + Pi) · scheduler (daily/weekly + `tv_off` actions) · false-alarm grace · central config · systemd deployment · **TensorRT GPU camera service running live on the Jetson** (`jetson_gpu`, CPU fallback intact) · stream watchdog · ad-hoc voice (`edgeguard/command/say`) · configurable unknown-person announcements (`announce_unknown`) · **time-slot alert rules** (`alerts:` + live `night_front_door` rule) · **doorbell siren** (`doorbell.py` / `scripts/siren.py`) · **garage door state detection + Pi announcements** (`garage_doors.py` → retained `edgeguard/garage/doors`) · **Kasa plug control over MQTT** (`edgeguard-kasa`) · **Bravia TV control** (power/input/apps) · cast-to-TV audio/video · CI green
+- 🔜 Zigbee → event-bus bridging/correlation · security decision engine · armed/disarmed state · dashboard · sub-stream decoding (ffmpeg CPU is now the bottleneck) · GPU service under systemd · live camera→TV casting (DLNA push lead) · MyQ garage integration (cloud API, rate-limited) · 3 more Reolink cameras (RTSP currently disabled)
 
-Built on the **NVIDIA Jetson Xavier NX**, **Raspberry Pi 3**, **Reolink cameras**, **Zigbee sensors**, **Google Home speakers**, **AWS Polly**.
+Built on the **NVIDIA Jetson Xavier NX**, **Raspberry Pi 3**, **Reolink cameras** (incl. D340W doorbell), **Zigbee sensors**, **Google Home speakers**, **Sony Bravia TV**, **TP-Link Kasa plugs**, **AWS Polly**.

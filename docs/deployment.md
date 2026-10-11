@@ -10,11 +10,13 @@
 | Component | Device | How it starts | Auto-restart |
 |---|---|---|---|
 | MQTT broker (event bus) | **Jetson** | systemd `mosquitto` | ✅ (boot) |
-| Reolink camera service | **Jetson** | `python -m cameras.main` / systemd `edgeguard-cameras` | optional |
+| Reolink camera service (GPU) | **Jetson** | `python -m jetson_gpu.main` (detached, `setsid` + `set -a`) / systemd `edgeguard-cameras-gpu` (ready, needs sudo to install) | ⚠️ detached (manual) / ✅ once installed |
+| Garage door monitor | **Jetson** | `python -m garage_doors monitor` (detached, log `/tmp/garage_doors.log`) | ⚠️ detached (manual) |
 | USB camera pipeline | **dev machine** | `python -m face_recognition.main` (GUI) | manual |
 | Voice broadcaster | **Pi** | systemd `edgeguard-voice` | ✅ (boot + crash) |
+| Kasa plug controller | **Pi** | systemd `edgeguard-kasa` | ✅ (boot + crash) |
 | Zigbee2MQTT + Pi broker | **Pi** | Docker (`zigbee2mqtt`, `zigbee2mqt_mqtt_1`) | ✅ (docker restart) |
-| MQTT monitor / tools | any | `scripts/mqtt_monitor.py` | manual |
+| MQTT monitor / tools | any | `scripts/mqtt_monitor.py`, `scripts/say.py`, `scripts/plug.py`, `scripts/siren.py` | manual |
 
 ---
 
@@ -27,65 +29,33 @@ ssh pparkitn@JETSON_IP
 systemctl status mosquitto        # should be: active
 ```
 
-**2. Reolink camera service**
+**2. Reolink camera service (GPU variant, running live)**
 
-*Step A — first-time setup (one-time per device; already done on this Jetson):*
-
-```bash
-mkdir -p ~/edgeguard
-rsync -az --exclude '.venv' --exclude '.git' --exclude 'data' \
-  ./ ~/edgeguard/                # or: git clone/pull on the device
-~/py38env/bin/pip install -r requirements-vision.txt
-mkdir -p ~/edgeguard/data/embeddings ~/edgeguard/data/unknown_faces
-rsync -az data/embeddings/faces.npz ~/edgeguard/data/embeddings/
-# set the system ffmpeg in the Jetson's local config.yaml:
-#   vision:ffmpeg_path: /usr/bin/ffmpeg
-```
-
-*Step B — start it now (manual, foreground; Ctrl+C to stop):*
+The Jetson runs the **TensorRT GPU pipeline** (`jetson_gpu.main` — TensorRT bindings are py36-only on JetPack 4.4, so it runs under the **system Python 3.6**, not `~/py38env`). Deploy with:
 
 ```bash
-cd ~/edgeguard
-EDGEGUARD_CAMERA_PASSWORD='...' \
-  ~/py38env/bin/python -u -m cameras.main
+CONVERT_ENGINES=1 ./scripts/deploy_cameras_gpu.sh   # rsync + build TRT engines (or INSTALL_SERVICE=1 for systemd)
 ```
 
-*Step C — make it survive reboots (systemd service):*
+Manual (detached) launch — the `set -a` is **required** so `cameras.env` assignments reach the process:
 
 ```bash
-# 1. credentials/settings file (no sudo needed, permissions locked)
-printf 'EDGEGUARD_FFMPEG_PATH=/usr/bin/ffmpeg\nEDGEGUARD_CAMERA_PASSWORD=...\n' \
-  > ~/edgeguard/cameras.env && chmod 600 ~/edgeguard/cameras.env
-
-# 2. install + start the service (the one command you need):
-sudo cp ~/edgeguard/deploy/edgeguard-cameras.service /etc/systemd/system/ \
-  && sudo systemctl daemon-reload \
-  && sudo systemctl enable --now edgeguard-cameras
+cd ~/edgeguard && set -a && . ./cameras.env && set +a && \
+  setsid bash -c "exec python3 -u -m jetson_gpu.main > /tmp/jetson_cameras_gpu.log 2>&1" \
+  < /dev/null > /dev/null 2>&1 &
 ```
 
-After any reboot the camera service comes back automatically. Verify:
+The CPU pipeline (`python -m cameras.main` under `~/py38env`) is the fallback — the GPU module drops back to onnxruntime automatically if the engines are missing.
+
+**3. Garage door monitor** (publishes retained `edgeguard/garage/doors`):
 
 ```bash
-systemctl status edgeguard-cameras        # active (running)
-journalctl -u edgeguard-cameras -f        # live logs
-ss -tn | grep :554                        # RTSP connections to the cameras
+cd ~/edgeguard && set -a && . ./cameras.env && set +a && \
+  setsid bash -c "exec python3 -u -m garage_doors monitor > /tmp/garage_doors.log 2>&1" \
+  < /dev/null > /dev/null 2>&1 &
 ```
 
-**How the camera service works** (`deploy/edgeguard-cameras.service`):
-
-| Setting | Value | Why |
-|---|---|---|
-| `WorkingDirectory` | `/home/pparkitn/edgeguard` | so `cameras.main` finds `config.yaml`, `data/`, models |
-| `EnvironmentFile` | `~/edgeguard/cameras.env` | secrets/settings outside the repo: `EDGEGUARD_FFMPEG_PATH` (Jetson has no imageio ffmpeg binary → system `/usr/bin/ffmpeg`) and `EDGEGUARD_CAMERA_PASSWORD` (perms 600) |
-| `ExecStart` | `~/py38env/bin/python -m cameras.main` | Python 3.8 venv with the vision deps (Jetson's system Python 3.6 can't run insightface) |
-| `Restart=always` | — | auto-restart 10 s after any crash |
-| `WantedBy=multi-user.target` | — | starts on every boot |
-
-Manage it like any service: `systemctl status|restart|stop edgeguard-cameras`, `journalctl -u edgeguard-cameras -f`. Everything else (cameras, thresholds, MQTT) comes from `config.yaml` — edit + `git pull` + restart.
-
-Remove the service (if ever needed): `sudo systemctl disable --now edgeguard-cameras && sudo rm /etc/systemd/system/edgeguard-cameras.service && sudo systemctl daemon-reload`
-
-Remove the service (if ever needed): `sudo systemctl disable --now edgeguard-cameras && sudo rm /etc/systemd/system/edgeguard-cameras.service && sudo systemctl daemon-reload`
+First calibrate on the dev machine: `python -m garage_doors reference` (doors closed) → `calibrate` (verify ROI boxes) → `check`. The monitor publishes `{"left": "open|closed", "right": "open|closed"}` only on state change.
 
 ---
 
@@ -100,18 +70,34 @@ sudo systemctl restart edgeguard-voice           # restart
 journalctl -u edgeguard-voice -f                 # live logs
 ```
 
-Update it from any machine (rsync + pip + optional service install):
+Update it from any machine (rsync + pip + optional service install; **always pass `PI_HOST=192.168.2.168`** — the script's default `PI_HOST` is the literal string `PI_IP`):
 
 ```bash
+PI_HOST=192.168.2.168 \
 AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... \
   INSTALL_SERVICE=1 ./scripts/deploy_voice.sh
 ```
 
-**2. Zigbee2MQTT + broker** — Docker containers, auto-start:
+The broadcaster also: announces **garage door state changes** (`garage_doors_announce:` config — subscribes `edgeguard/garage/doors`, baseline-on-restart, local-only by default), fires **time-slot alert rules** (`alerts:` — e.g. `night_front_door`, optionally with `siren: true` → doorbell siren), and serves **ad-hoc announcements** (`edgeguard/command/say` via `scripts/say.py "text"`).
+
+**2. Kasa plug controller** — systemd `edgeguard-kasa`, MQTT topic `edgeguard/command/plug/<name>` (`on|off|toggle|state`); CLI `python scripts/plug.py <name> on|off|toggle|state`.
+
+**3. Zigbee2MQTT + broker** — Docker containers, auto-start:
 
 ```bash
 sudo docker ps    # zigbee2mqtt + zigbee2mqt_mqtt_1 should be Up
 ```
+
+### Doorbell siren (Reolink D340W)
+
+The doorbell's built-in siren is controlled via the HTTP CGI API (`AudioAlarmPlay`) — it needs the **web/admin password** (can differ from the RTSP one), configured in `doorbell:` in the per-device `config.yaml` (gitignored):
+
+```bash
+python scripts/siren.py on|off      # from the dev machine
+python -m doorbell siren on|off     # equivalent
+```
+
+Alert rules can also set `siren: true` to sound it automatically.
 
 ---
 
@@ -145,7 +131,8 @@ rsync -az data/embeddings/faces.npz pparkitn@JETSON_IP:~/edgeguard/data/embeddin
 |---|---|---|
 | Broker up | `mosquitto_sub -h JETSON_IP -t edgeguard/# -v` | live events as people appear |
 | Events | `.venv/bin/python scripts/mqtt_monitor.py` | colorized stream + summary |
-| Jetson cameras | `ssh pparkitn@JETSON_IP 'tail -f /tmp/jetson_cameras.log'` (or `journalctl -u edgeguard-cameras -f`) | detection lines |
+| Jetson cameras | `ssh pparkitn@JETSON_IP 'tail -f /tmp/jetson_cameras_gpu.log'` | `GPU inference: N ms` lines |
+| Garage doors | `mosquitto_sub -h JETSON_IP -t edgeguard/garage/doors -v` | retained `{"left": "…", "right": "…"}` |
 | Broadcast (Pi) | `ssh pi@PI_IP 'journalctl -u edgeguard-voice -f'` | announcements + playback lines |
 | Speakers | audio from the Pi speaker + Google Home devices | announcement text |
 | Snapshots | `ls data/unknown_faces/<camera_id>/` | new crops for unknown people |
@@ -189,6 +176,7 @@ EDGEGUARD_MQTT_HOST=JETSON_IP \
 | `requirements-vision.txt` | camera pipeline machine | numpy, opencv-python, insightface, onnxruntime, scikit-learn, paho-mqtt |
 | `requirements-voice.txt` | broadcaster machine (Pi) | paho-mqtt, pychromecast, boto3, pygame |
 | `requirements.txt` | dev machine (everything) | includes both files above |
+| `requirements-dev.txt` | CI / lint / tests | pytest, ruff (no AWS/cast deps — CI-safe) |
 
 ---
 
@@ -240,7 +228,7 @@ ssh pparkitn@JETSON_IP
 
 - LAN IP: `JETSON_IP` (`eth0`), also `wlan0`, `docker0`, and a VPN `tun0` interface present.
 - Docker bridges (`docker0`, `br-*`) already in use on the device.
-- No camera attached yet — no `/dev/video*` devices present (Phase 1 pending).
+- No USB camera attached (`/dev/video*` absent) — the Jetson consumes the Reolink RTSP cameras only.
 
 ### Notes for the Vision Stack
 

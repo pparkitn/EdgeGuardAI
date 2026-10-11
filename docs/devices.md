@@ -15,7 +15,7 @@ All hardware used by the system, grouped by role. Images: `images/` (Wikimedia C
 | | |
 |---|---|
 | IP | JETSON_IP (SSH: JETSON_USER) |
-| Role | **MQTT broker** (Mosquitto, the event bus) + **Reolink camera service** (`edgeguard-cameras`) |
+| Role | **MQTT broker** (Mosquitto, the event bus) + **Reolink camera service** (GPU, `jetson_gpu.main`, detached) + **garage door monitor** (`garage_doors.py` → retained `edgeguard/garage/doors`) |
 | Specs | JetPack 4.4 (L4T R32.4.4) · 6-core Carmel CPU · Volta GPU (384 CUDA cores) · 8 GB RAM · 1 TB NVMe root |
 | Software | Ubuntu 18.04, Python 3.6 system / 3.8 in `~/py38env`, CUDA 10.2, TensorRT 7.1, Docker |
 
@@ -25,7 +25,7 @@ All hardware used by the system, grouped by role. Images: `images/` (Wikimedia C
 | | |
 |---|---|
 | IP | PI_IP (SSH: PI_USER) |
-| Role | **Voice broadcaster** (`edgeguard-voice` service) · **Zigbee2MQTT** + its own Mosquitto broker (Docker) · local audio |
+| Role | **Voice broadcaster** (`edgeguard-voice` service) · **Kasa plug controller** (`edgeguard-kasa` service) · **Zigbee2MQTT** + its own Mosquitto broker (Docker) · local audio |
 | Specs | Raspbian 11 (bullseye) · 1 GB RAM · 56 GB SD · 3.5 mm audio out (bcm2835) |
 | Audio | A speaker on the 3.5 mm jack (local playback via pygame) |
 
@@ -58,6 +58,14 @@ All hardware used by the system, grouped by role. Images: `images/` (Wikimedia C
 | Role | Garage monitoring → face detection/recognition |
 | Note | 4 MP Wi-Fi dome/bullet camera (older firmware: `/h264Preview_01_main` path format). |
 
+#### Reolink Video Doorbell WiFi D340W — front door
+| | |
+|---|---|
+| IP | 192.168.2.32 (RTSP user: `admin` + its **own** password — NOT the shared Reolink one; the web/admin password for the siren API can differ again) |
+| Stream | `rtsp://…/h264Preview_01_main` (H.264, 960×720 @ 2 fps) |
+| Role | Front-door monitoring → face detection/recognition; built-in **siren** via HTTP CGI (`doorbell.py` / `scripts/siren.py`) |
+| Note | WiFi doorbell — its RTSP **drops ~1/min and auto-reconnects** (stream watchdog handles it; the 2 wired Reolinks are stable). UID `9527000IKX0F18CT`. |
+
 #### USB camera — dev machine
 | | |
 |---|---|
@@ -84,6 +92,23 @@ All hardware used by the system, grouped by role. Images: `images/` (Wikimedia C
 <img src="images/google_nest_mini.jpg" width="180" alt="Google Nest Mini"/> <img src="images/google_home_mini.jpg" width="180" alt="Google Home Mini"/> <img src="images/google_home_max.jpg" width="200" alt="Google Home Max"/> <img src="images/google_home.jpg" width="180" alt="Google Home (Bedroom)"/>
 
 All four are cast targets for announcements (names are exact and case-sensitive).
+
+### Home automation
+
+#### Sony Bravia TV (XBR-75X900H)
+| | |
+|---|---|
+| IP | 192.168.2.233 (REST API port 80, PSK auth via `bravia.psk`) |
+| Role | Power/input/apps control (`python -m bravia`), cast audio/video announcements (`voice/cast.py`), scheduler `action: tv_off` |
+| Note | Volume/mute set commands are refused — the Denon AVR-1713 owns volume over CEC (use cast volume instead). Android TV apps can hold a stuck cast session — `cast.quit_app()` before playing. |
+
+#### TP-Link Kasa plugs
+| Name | IP | Type |
+|---|---|---|
+| `Back yard lights` | KP401 (.216) | single outlet |
+| `Front lights` / `Spare front` | KP400 (.214) | two sockets (child ids end with the socket number) |
+
+- Controlled over MQTT (`edgeguard-kasa` service on the Pi): topic `edgeguard/command/plug/<name>` payload `on|off|toggle|state`, status on `edgeguard/status/plug/<name>`; CLI `python scripts/plug.py <name> on|off|toggle|state`.
 
 ### Zigbee sensors (via Zigbee2MQTT on the Pi)
 
