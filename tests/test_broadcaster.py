@@ -18,6 +18,8 @@ def make_broadcaster():
 
     bc._pending_unknown = {}
 
+    bc.last_garage_state = None
+
     bc.announce = mock.Mock()
 
     bc.say = mock.Mock()
@@ -205,3 +207,179 @@ def test_say_command_does_not_touch_camera_events():
     bc.say.assert_not_called()
 
     assert bc.announce.call_count == 1
+
+
+def garage_msg(states):
+
+    return FakeMsg(
+        broadcaster.GARAGE_DOORS_TOPIC,
+        json.dumps(states).encode(),
+    )
+
+
+@pytest.fixture(autouse=True)
+def garage_templates():
+
+    original = broadcaster.GARAGE_DOORS_TEMPLATES
+
+    broadcaster.GARAGE_DOORS_TEMPLATES = {
+        "open": "The {side} garage door is open.",
+        "closed": "The {side} garage door is closed.",
+    }
+
+    yield
+
+    broadcaster.GARAGE_DOORS_TEMPLATES = original
+
+
+def test_garage_doors_first_message_is_baseline():
+
+    bc = make_broadcaster()
+
+    bc._on_message(
+        None,
+        None,
+        garage_msg(
+            {"left": "closed", "right": "closed"}
+        ),
+    )
+
+    bc.say.assert_not_called()
+
+    assert bc.last_garage_state == {
+        "left": "closed",
+        "right": "closed",
+    }
+
+
+def test_garage_doors_announces_open_change():
+
+    bc = make_broadcaster()
+
+    bc.last_garage_state = {
+        "left": "closed",
+        "right": "closed",
+    }
+
+    bc._on_message(
+        None,
+        None,
+        garage_msg(
+            {"left": "open", "right": "closed"}
+        ),
+    )
+
+    bc.say.assert_called_once()
+
+    text = bc.say.call_args[0][0]
+
+    assert "left" in text
+
+    assert "open" in text
+
+
+def test_garage_doors_announces_both_changes():
+
+    bc = make_broadcaster()
+
+    bc.last_garage_state = {
+        "left": "closed",
+        "right": "closed",
+    }
+
+    bc._on_message(
+        None,
+        None,
+        garage_msg(
+            {"left": "open", "right": "open"}
+        ),
+    )
+
+    text = bc.say.call_args[0][0]
+
+    assert "left" in text
+
+    assert "right" in text
+
+    assert text.count("open") == 2
+
+
+def test_garage_doors_no_announce_without_change():
+
+    bc = make_broadcaster()
+
+    bc.last_garage_state = {
+        "left": "closed",
+        "right": "closed",
+    }
+
+    bc._on_message(
+        None,
+        None,
+        garage_msg(
+            {"left": "closed", "right": "closed"}
+        ),
+    )
+
+    bc.say.assert_not_called()
+
+
+def test_garage_doors_malformed_payload_ignored():
+
+    bc = make_broadcaster()
+
+    bc.last_garage_state = {
+        "left": "closed",
+        "right": "closed",
+    }
+
+    bc._on_message(
+        None,
+        None,
+        FakeMsg(
+            broadcaster.GARAGE_DOORS_TOPIC,
+            b"not json",
+        ),
+    )
+
+    bc.say.assert_not_called()
+
+
+def test_garage_doors_cooldown_suppresses_second_change():
+
+    bc = make_broadcaster()
+
+    bc.last_garage_state = {
+        "left": "closed",
+        "right": "closed",
+    }
+
+    broadcast_original = broadcaster.GARAGE_DOORS_COOLDOWN
+
+    broadcaster.GARAGE_DOORS_COOLDOWN = 30.0
+
+    try:
+
+        bc._on_message(
+            None,
+            None,
+            garage_msg(
+                {"left": "open", "right": "closed"}
+            ),
+        )
+
+        bc._on_message(
+            None,
+            None,
+            garage_msg(
+                {"left": "open", "right": "open"}
+            ),
+        )
+
+    finally:
+
+        broadcaster.GARAGE_DOORS_COOLDOWN = (
+            broadcast_original
+        )
+
+    bc.say.assert_called_once()

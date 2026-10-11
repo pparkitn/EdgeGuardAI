@@ -25,6 +25,12 @@ from .config import (
     ANNOUNCE_UNKNOWN,
     ANNOUNCEMENT_COOLDOWN,
     AUDIO_DIR,
+    GARAGE_DOORS_COOLDOWN,
+    GARAGE_DOORS_ENABLED,
+    GARAGE_DOORS_LOCAL,
+    GARAGE_DOORS_SPEAKERS,
+    GARAGE_DOORS_TEMPLATES,
+    GARAGE_DOORS_TOPIC,
     HTTP_PORT,
     LOCAL_PLAYBACK,
     MQTT_HOST,
@@ -133,6 +139,8 @@ class Broadcaster:
         self._pending_unknown = {}
 
         self.last_alert_time = {}
+
+        self.last_garage_state = None
 
         self.lan_ip = get_lan_ip()
 
@@ -261,6 +269,12 @@ class Broadcaster:
 
             return
 
+        if msg.topic == GARAGE_DOORS_TOPIC:
+
+            self._handle_garage_doors(msg)
+
+            return
+
         try:
 
             event = json.loads(
@@ -277,6 +291,145 @@ class Broadcaster:
             return
 
         self.handle_event(event)
+
+    def _handle_garage_doors(self, msg):
+
+        """Speak garage door state changes from edgeguard/garage/doors.
+
+        The first message (usually the retained one, e.g. after a
+        restart) establishes the baseline and is NOT announced; only
+        actual left/right state transitions are spoken, throttled by
+        the garage-door cooldown.
+        """
+
+        if not GARAGE_DOORS_ENABLED:
+
+            return
+
+        try:
+
+            states = json.loads(
+                msg.payload.decode()
+            )
+
+            if not isinstance(states, dict):
+
+                raise ValueError(
+                    "garage door payload is not an object"
+                )
+
+            states = {
+                side: str(states.get(side, "")).strip()
+                for side in ("left", "right")
+            }
+
+        except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+
+            logger.warning(
+                "Ignoring malformed garage door "
+                "message on %s: %r",
+                msg.topic,
+                msg.payload.decode(
+                    errors="replace"
+                )[:200],
+            )
+
+            return
+
+        if not all(
+            state in ("open", "closed")
+            for state in states.values()
+        ):
+
+            logger.debug(
+                "Garage door payload without "
+                "open/closed state ignored: %s",
+                states,
+            )
+
+            return
+
+        if self.last_garage_state is None:
+
+            self.last_garage_state = states
+
+            logger.info(
+                "Garage door baseline: %s",
+                states,
+            )
+
+            return
+
+        changed = [
+            side
+            for side in ("left", "right")
+            if states[side]
+            != self.last_garage_state[side]
+        ]
+
+        self.last_garage_state = states
+
+        if not changed:
+
+            return
+
+        last = self.last_announcement.get(
+            "garage_door",
+            0.0,
+        )
+
+        if (
+            time.time() - last
+            < GARAGE_DOORS_COOLDOWN
+        ):
+
+            logger.info(
+                "Garage door announcement in "
+                "cooldown (%.0fs)",
+                GARAGE_DOORS_COOLDOWN,
+            )
+
+            return
+
+        parts = []
+
+        for side in changed:
+
+            template = GARAGE_DOORS_TEMPLATES.get(
+                states[side]
+            )
+
+            if template:
+
+                parts.append(
+                    template.format(side=side)
+                )
+
+        if not parts:
+
+            return
+
+        text = " ".join(parts)
+
+        self.last_announcement["garage_door"] = (
+            time.time()
+        )
+
+        logger.info(
+            "Garage door change: %s -> %s (%s)",
+            changed,
+            states,
+            text,
+        )
+
+        self.say(
+            text,
+            speakers=(
+                GARAGE_DOORS_SPEAKERS
+                or None
+            ),
+            local=GARAGE_DOORS_LOCAL,
+        )
 
     def _handle_say_command(self, msg):
 

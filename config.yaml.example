@@ -149,6 +149,19 @@ garage_doors:
     left:  {x: 0.05, y: 0.12, w: 0.42, h: 0.78}
     right: {x: 0.53, y: 0.12, w: 0.42, h: 0.78}
 
+# --- garage door announcements (Pi broadcaster) -------------------
+# Speaks left/right garage door open/closed changes (subscribed from
+# the Jetson monitor's edgeguard/garage/doors topic). First message
+# (usually the retained one after restart) is just a baseline.
+garage_doors_announce:
+  enabled: true
+  speakers: []              # empty = all cast speakers
+  local: true
+  cooldown: 30.0
+  templates:
+    open: "The {side} garage door is open."
+    closed: "The {side} garage door is closed."
+
 # --- Kasa smart plugs (MQTT-controlled, python-kasa) --------------
 kasa:
   plugs:

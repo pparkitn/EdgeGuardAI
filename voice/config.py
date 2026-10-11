@@ -140,6 +140,56 @@ UNKNOWN_CONFIRM_DELAY = get_float(
     default=60.0,
 )
 
+# --- Garage door announcements ---
+
+# The Jetson garage_doors.py monitor publishes state changes to
+# broker.topic_prefix + "/garage/doors" (retained JSON
+# {"left": "open|closed", "right": "open|closed"}). If enabled, the
+# broadcaster speaks the changes to the configured speakers.
+
+GARAGE_DOORS_TOPIC = (
+    get(
+        "broker",
+        "topic_prefix",
+        default="edgeguard",
+    )
+    + "/garage/doors"
+)
+
+GARAGE_DOORS_ENABLED = get_bool(
+    "garage_doors_announce",
+    "enabled",
+    default=True,
+)
+
+GARAGE_DOORS_SPEAKERS = get_list(
+    "garage_doors_announce",
+    "speakers",
+    default=[],
+)
+
+GARAGE_DOORS_LOCAL = get_bool(
+    "garage_doors_announce",
+    "local",
+    default=True,
+)
+
+GARAGE_DOORS_COOLDOWN = get_float(
+    "garage_doors_announce",
+    "cooldown",
+    default=30.0,
+)
+
+GARAGE_DOORS_TEMPLATES = get(
+    "garage_doors_announce",
+    "templates",
+    default={
+        "open": "The {side} garage door is open.",
+        "closed": "The {side} garage door is closed.",
+    },
+)
+
+
 # --- Alert rules ---
 #
 # Multi-face / time-slot alert rules. Each rule watches one camera for

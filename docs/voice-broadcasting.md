@@ -104,6 +104,24 @@ alerts:
 - The alert uses the same targeted `say()` path as the scheduler, so `speakers`/`local` control exactly which devices hear it.
 - Set `siren: true` on a rule to also sound the **doorbell siren** when it fires (via `doorbell.py` / the `doorbell:` config section) — e.g. a loud physical alarm for a night front-door rule.
 
+### Garage door announcements
+
+The Jetson `garage_doors.py` monitor publishes state changes to `edgeguard/garage/doors` (retained JSON `{"left": "open|closed", "right": "open|closed"}`). The broadcaster subscribes to that topic and speaks each transition:
+
+```yaml
+garage_doors_announce:
+  enabled: true
+  speakers: []              # empty = all cast speakers
+  local: true
+  cooldown: 30.0            # seconds between garage-door announcements
+  templates:
+    open: "The {side} garage door is open."
+    closed: "The {side} garage door is closed."
+```
+
+- The first message after a (re)start — the retained one — only sets the baseline and is never spoken, so a restart doesn't produce a stale announcement.
+- Only actual left/right transitions are announced; `{side}` is `left` or `right` (both changed → one sentence per door, joined).
+
 ### Components (`voice/`)
 
 | Module | Purpose |
