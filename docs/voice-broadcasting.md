@@ -79,6 +79,7 @@ The broadcaster is self-contained: it embeds the HTTP server that serves cached 
   - Polly down / bad credentials → announcement skipped, pipeline continues
   - Speaker offline → other speakers still get the audio
   - MQTT down → broadcaster reconnects (1–30 s backoff)
+- **Stale cast connections**: after the service has been running for hours (overnight idle), pychromecast's connections can go stale — every cast then fails with `NotConnected: ... is connecting...` ("Google Cast: played on 0 of N targeted speaker(s)") while local playback still works. Restart `edgeguard-voice` to re-discover (a code-level auto-reconnect in `voice/cast.py` is still TODO).
 - Logs to console + `logs/broadcaster.log` (or journald under systemd).
 
 ### Alert rules (`alerts`)

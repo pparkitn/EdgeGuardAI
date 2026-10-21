@@ -249,3 +249,27 @@ Hands-on findings across the multi-machine system, cameras, and speakers.
   - Pi: `/home/pi/edgeguard/config.yaml` → `garage_doors_announce: enabled: false` (sed in place) + `sudo systemctl restart edgeguard-voice` → active. No further announcements regardless of the topic.
 - The retained `edgeguard/garage/doors` topic still holds `{"left":"closed","right":"closed"}` from before shutdown — inert, nothing subscribes/acts on it now. Any new Jetson reboot will NOT restart the monitor (it was a detached setsid process, no systemd unit).
 - Code/config/docs all remain in the repo (`garage_doors.py`, `config.yaml.example` `garage_doors:` + `garage_doors_announce:`) — fully revertible by re-running `python -m garage_doors monitor` on the Jetson (with `set -a` + cameras.env) and flipping `enabled: true` on the Pi + restart. No repo changes made for the disable.
+
+---
+
+### Session Learnings (2026-10-21)
+
+**Stale Cast connections — every cast fails after the broadcaster idles for hours (restart fixes)**
+
+- Trigger: user asked to broadcast "Michael do you want to play chess ?" on all sources (2026-10-20 16:02). Local Pi playback worked, but all casts failed: "Google Cast: played on 0 of 3 targeted speaker(s)" with `pychromecast.error.NotConnected: Chromecast 192.168.2.224:8009 is connecting...` raised in `voice/cast.py::_play_on` → `media.play_media` (pychromecast socket stuck in CONNECTING).
+- Speaker-side was fine: a fresh discovery process on the Pi (`pychromecast.get_listed_chromecasts`) found the live speakers instantly (Kitchen .133, Natalia .224, Bedroom .39 at the time). Only the long-running broadcaster's connections were stale.
+- Pattern: the service (up since Oct 19 23:06) failed every cast that day (07:10, 08:45, 13:00, 16:02 — all "0 of N"). After the Oct 20 23:05 Pi reboot the service auto-started, and its first cast use next morning (07:10) failed the same way — connections die within hours of idle and never recover on their own.
+- **Ops fix (verified twice)**: `sudo systemctl restart edgeguard-voice` → fresh discovery + connections; the re-sent say then played on **3 of 3** speakers (16:07 Oct 20), and the 08:23 Oct 21 restart reconnected all 3 live speakers (Kitchen speaker, Natalia, Bedroom) ahead of the 08:44/08:45 school announcements.
+- Discovery flake seen once: the 08:18 Oct 21 restart did not connect Kitchen speaker (Nest Mini) even though a fresh discovery moments later found it; the next restart (08:23) connected all 3 live speakers. If a speaker is missing after startup, restart again.
+- Code fix (TODO): reconnect/re-discover in `voice/cast.py` when `NotConnected` is raised. Added to AGENTS.md Planned.
+
+**Speaker inventory: `Kitchen Speaker` (Home Mini) offline; DHCP drift**
+
+- Full LAN cast discovery (twice, 2026-10-21) sees only: TV, Kitchen speaker (Nest Mini), Natalia speaker, Bedroom speaker. `Kitchen Speaker` (capital S, Home Mini) is not on the network at all (already absent from the Oct 19 and Oct 20 service starts) — likely unplugged/removed. It's still in the Pi's `speakers:` config, so every start logs `Speakers not found: Kitchen Speaker`; casts target the 3 live speakers.
+- DHCP has drifted (2026-10-21: Kitchen .133, Natalia .224, Bedroom .40) — discovery is by friendly name, so this only matters for manual tests.
+- Left for the user: remove `Kitchen Speaker` from the Pi config or check the device.
+
+**Pi reboot + pygame/ALSA underrun flood (minor ops)**
+
+- The Pi rebooted 2026-10-20 23:05:44 (no RTC — fake-hwclock; NTP synced 23:07:14). `edgeguard-voice` auto-recovered (enabled + `Restart=always`); camera events resumed (garage events on the bus at 07:20–07:21).
+- The pre-restart broadcaster process was continuously spamming `ALSA lib pcm.c ... underrun occurred` into the journal (pygame mixer left running after the 07:10 local playback) — journalctl queries over that window timed out and `logs/broadcaster.log` reached 2.1 MB. A service restart clears it (0 underruns after 08:18). Cosmetic, but it can drown the journal.
