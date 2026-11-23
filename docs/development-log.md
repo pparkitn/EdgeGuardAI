@@ -273,3 +273,13 @@ Hands-on findings across the multi-machine system, cameras, and speakers.
 
 - The Pi rebooted 2026-10-20 23:05:44 (no RTC — fake-hwclock; NTP synced 23:07:14). `edgeguard-voice` auto-recovered (enabled + `Restart=always`); camera events resumed (garage events on the bus at 07:20–07:21).
 - The pre-restart broadcaster process was continuously spamming `ALSA lib pcm.c ... underrun occurred` into the journal (pygame mixer left running after the 07:10 local playback) — journalctl queries over that window timed out and `logs/broadcaster.log` reached 2.1 MB. A service restart clears it (0 underruns after 08:18). Cosmetic, but it can drown the journal.
+
+---
+
+### Session Learnings (2026-11-23)
+
+**Camera credential locations (dev-machine audit; rotation still pending)**
+
+- User asked which camera passwords the agent "has access to". Result: the dev machine's gitignored `config.yaml` is the only local store — plaintext RTSP creds for the 2 wired Reolinks (shared `edgeguard` user + shared camera password; the `@` is percent-encoded in the RTSP URLs) and the `doorbell:` section (web/admin creds used by the siren CGI API — on the D340W these can differ from the RTSP ones). The doorbell's `front_door` RTSP password (Jetson `config.yaml`) and the shared `EDGEGUARD_CAMERA_PASSWORD` (Jetson `cameras.env`) are NOT on the dev machine.
+- No credential values were written to any tracked file in this session — the values only appeared in the agent session; `config.yaml` stays gitignored and docs/`config.yaml.example` use placeholders only.
+- **Still pending from the 2026-10-11 git-history leak** (both passwords were briefly public): rotate the shared Reolink camera password and the doorbell web/admin password. Rotation order: change them in the Reolink camera/doorbell settings first, then update dev `config.yaml` (`cameras.rtsp.*` + `doorbell:`), Jetson `cameras.env` (`EDGEGUARD_CAMERA_PASSWORD`) + Jetson `config.yaml` (`front_door`, if its RTSP password changes too), Pi `config.yaml` (`doorbell:` — needed by `siren: true` alert rules), then restart the Jetson camera service and `sudo systemctl restart edgeguard-voice` on the Pi.
