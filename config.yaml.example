@@ -122,6 +122,29 @@ bravia:
   port: 80
   psk: ""
 
+# --- live camera view on a Cast device / TV (tv_view) -------------
+# On demand: composes the cameras below into one live grid stream and
+# casts it to a Chromecast-enabled display:
+#   python -m tv_view            (Ctrl+C stops the view)
+#   python -m tv_view --list     (find cast device names)
+# A camera entry is an id from cameras.rtsp, a full source string
+# (rtsp:// URL or v4l2:/dev/videoX), or a dict with a source or
+# inline overrides - e.g. a doorbell whose RTSP password differs
+# (keep secrets in the per-device config.yaml only).
+tv_view:
+  tv: ""                  # cast device friendly name; see --list
+  http_port: 8100         # HLS server port (voice broadcaster uses 8000)
+  host_ip: ""             # this machine's LAN IP (auto-detected)
+  frame_rate: 10
+  columns: 0              # grid columns; 0 = auto (2 for 4+ cameras)
+  cameras: []
+  # cameras:
+  #   - back_yard             # id under cameras.rtsp
+  #   - garage
+  #   - id: front_door        # doorbell: its own RTSP password
+  #     password: "..."
+  #   - v4l2:/dev/video2      # USB webcam
+
 # --- Reolink doorbell (siren/alarm, HTTP CGI API) -----------------
 # password is a secret: set it in your per-device config.yaml or via
 # EDGEGUARD_DOORBELL_PASSWORD, never here. Note: the HTTP API needs

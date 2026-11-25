@@ -40,6 +40,7 @@ Camera detects & recognizes a person  →  MQTT event  →  Security decision  �
 | 🚗 **Garage door detection** | garage camera ROI analysis → retained `edgeguard/garage/doors` state → spoken announcements on the Pi |
 | 🔌 **Kasa plug control** | TP-Link KP400/KP401 over MQTT (`edgeguard-kasa` service, `scripts/plug.py`) |
 | 📺 **TV control** | Sony Bravia REST IP control (`bravia.py`: power, input, apps) |
+| 📺 **Live camera view** | on-demand live camera grid cast to any Chromecast/TV (`tv_view.py` — `python -m tv_view`; self-healing fMP4 HLS) |
 | 💬 **Ad-hoc voice** | `scripts/say.py "text"` → `edgeguard/command/say` → Polly/cast pipeline |
 | 🚪 **Zigbee sensors** | 4 door contacts + smart plug via Zigbee2MQTT (bridge pending) |
 | 🛡️ **Privacy by design** | face images/embeddings never leave the LAN or the repo |
@@ -105,6 +106,7 @@ Full setup, per-device runbook, and service installs: see **[Deployment](docs/de
 | [Deployment](docs/deployment.md) | **per-device runbook**: Jetson (broker + camera service + systemd), Pi (broadcaster + zigbee), dev machine (USB pipeline), verification |
 | [Configuration](docs/configuration.md) | central `config.yaml`, env-var overrides, requirements, repo structure |
 | [Camera Service](docs/camera-service.md) | Reolink RTSP setup, ONVIF stream discovery, ffmpeg decoder, per-camera agents |
+| [Live Camera View](docs/tv-view.md) | cast an on-demand live grid of the cameras to a Chromecast/TV (`tv_view.py`) |
 | [Voice Broadcasting](docs/voice-broadcasting.md) | Polly, speakers, delivery channels, false-alarm grace period, scheduled announcements |
 | [Devices](docs/devices.md) | every device & sensor with photos and roles |
 | [Remote Control](docs/remote-opencode-tailscale-ssh-tmux.md) | control a running OpenCode session from a phone (Tailscale + SSH + tmux) |
@@ -200,7 +202,7 @@ Notes for JetPack 4.4: `pycuda` builds with `--no-build-isolation` + `CFLAGS=-I/
 
 ## 🧩 Status
 
-- ✅ Face recognition (USB + 3 Reolink cameras incl. front-door D340W doorbell) · MQTT event bus · voice broadcast (4 speakers + Pi) · scheduler (daily/weekly + `tv_off` actions) · false-alarm grace · central config · systemd deployment · **TensorRT GPU camera service running live on the Jetson** (`jetson_gpu`, CPU fallback intact) · stream watchdog · ad-hoc voice (`edgeguard/command/say`) · configurable unknown-person announcements (`announce_unknown`) · **time-slot alert rules** (`alerts:` + live `night_front_door` rule) · **doorbell siren** (`doorbell.py` / `scripts/siren.py`) · **garage door state detection + Pi announcements** (`garage_doors.py` → retained `edgeguard/garage/doors`) · **Kasa plug control over MQTT** (`edgeguard-kasa`) · **Bravia TV control** (power/input/apps) · cast-to-TV audio/video · CI green
-- 🔜 Zigbee → event-bus bridging/correlation · security decision engine · armed/disarmed state · dashboard · sub-stream decoding (ffmpeg CPU is now the bottleneck) · GPU service under systemd · live camera→TV casting (DLNA push lead) · MyQ garage integration (cloud API, rate-limited) · 3 more Reolink cameras (RTSP currently disabled)
+- ✅ Face recognition (USB + 3 Reolink cameras incl. front-door D340W doorbell) · MQTT event bus · voice broadcast (4 speakers + Pi) · scheduler (daily/weekly + `tv_off` actions) · false-alarm grace · central config · systemd deployment · **TensorRT GPU camera service running live on the Jetson** (`jetson_gpu`, CPU fallback intact) · stream watchdog · ad-hoc voice (`edgeguard/command/say`) · configurable unknown-person announcements (`announce_unknown`) · **time-slot alert rules** (`alerts:` + live `night_front_door` rule) · **doorbell siren** (`doorbell.py` / `scripts/siren.py`) · **garage door state detection + Pi announcements** (`garage_doors.py` → retained `edgeguard/garage/doors`) · **Kasa plug control over MQTT** (`edgeguard-kasa`) · **Bravia TV control** (power/input/apps) · cast-to-TV audio/video · **live camera view on Cast/TV** (`tv_view.py` — on-demand camera grid, fMP4 HLS, self-healing feeders) · CI green
+- 🔜 Zigbee → event-bus bridging/correlation · security decision engine · armed/disarmed state · dashboard · sub-stream decoding (ffmpeg CPU is now the bottleneck) · GPU service under systemd · live camera view on the Sony BRAVIA (its DMR rejects live HLS/fMP4 — DLNA push lead) · MyQ garage integration (cloud API, rate-limited) · 3 more Reolink cameras (RTSP currently disabled)
 
 Built on the **NVIDIA Jetson Xavier NX**, **Raspberry Pi 3**, **Reolink cameras** (incl. D340W doorbell), **Zigbee sensors**, **Google Home speakers**, **Sony Bravia TV**, **TP-Link Kasa plugs**, **AWS Polly**.
